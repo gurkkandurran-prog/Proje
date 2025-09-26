@@ -1766,7 +1766,7 @@ def create_fluid_dropdown():
 
 def scenario_input_form(scenario_num, scenario_data=None):
     default_values = {
-        "use_valve_size": True,  # Default to True
+        "use_valve_size": True,
         "sg": 1.0,
         "visc": 1.0,
         "pv": 0.023,
@@ -1775,7 +1775,7 @@ def scenario_input_form(scenario_num, scenario_data=None):
         "z": 1.0,
         "rho": 1.0,
         "fluid_type": "liquid",
-        "pipe_d": 2.0  # Default pipe diameter
+        "pipe_d": 2.0
     }
     
     if scenario_data is None:
@@ -1822,6 +1822,43 @@ def scenario_input_form(scenario_num, scenario_data=None):
                 key=f"fluid_type_{scenario_num}"
             ).lower()
     
+    # Initialize calculated values with defaults for the current fluid type
+    if fluid_type == "liquid":
+        calc_sg = 1.0
+        calc_visc = 1.0
+        calc_pv = 0.023
+        calc_pc = 220.55
+    elif fluid_type == "gas":
+        calc_sg = 1.0
+        calc_k = 1.4
+        calc_z = 1.0
+    else:  # steam
+        calc_k = 1.4
+        calc_rho = 1.0
+    
+    # Update calculated values if fluid library is selected
+    if fluid_library != "Select Fluid Library...":
+        fluid_data = FLUID_LIBRARY[fluid_library]
+        
+        # Always use library fluid type
+        fluid_type = fluid_data["type"]
+        
+        # Calculate properties based on library functions
+        if fluid_data.get("visc_func") and fluid_data["type"] == "liquid":
+            calc_visc = fluid_data["visc_func"](scenario_data["temp"], scenario_data["p1"])
+        if fluid_data.get("k_func") and fluid_data["type"] in ["gas", "steam"]:
+            calc_k = fluid_data["k_func"](scenario_data["temp"], scenario_data["p1"])
+        if fluid_data.get("pv_func") and fluid_data["type"] == "liquid":
+            calc_pv = fluid_data["pv_func"](scenario_data["temp"], scenario_data["p1"])
+        if fluid_data.get("pc_func") and fluid_data["type"] == "liquid":
+            calc_pc = fluid_data["pc_func"]()
+        if fluid_data.get("rho_func") and fluid_data["type"] == "steam":
+            calc_rho = fluid_data["rho_func"](scenario_data["temp"], scenario_data["p1"])
+        if fluid_data.get("z_func") and fluid_data["type"] == "gas":
+            calc_z = fluid_data["z_func"](scenario_data["temp"], scenario_data["p1"])
+        if fluid_data.get("sg") is not None:
+            calc_sg = fluid_data["sg"]
+    
     col1, col2 = st.columns(2)
     with col1:
         flow_label = "Flow Rate (m³/h)" if fluid_type == "liquid" else "Flow Rate (std m³/h)" if fluid_type == "gas" else "Flow Rate (kg/h)"
@@ -1859,111 +1896,90 @@ def scenario_input_form(scenario_num, scenario_data=None):
         )
     
     with col2:
-        if fluid_library != "Select Fluid Library...":
-            fluid_data = FLUID_LIBRARY[fluid_library]
-            scenario_data["fluid_type"] = fluid_data["type"]
-            if fluid_data.get("visc_func") and fluid_data["type"] == "liquid":
-                scenario_data["visc"] = fluid_data["visc_func"](temp, p1)
-            if fluid_data.get("k_func") and fluid_data["type"] in ["gas", "steam"]:
-                scenario_data["k"] = fluid_data["k_func"](temp, p1)
-            if fluid_data.get("pv_func") and fluid_data["type"] == "liquid":
-                scenario_data["pv"] = fluid_data["pv_func"](temp, p1)
-            if fluid_data.get("pc_func") and fluid_data["type"] == "liquid":
-                scenario_data["pc"] = fluid_data["pc_func"]()
-            if fluid_data.get("rho_func") and fluid_data["type"] == "steam":
-                scenario_data["rho"] = fluid_data["rho_func"](temp, p1)
-            if fluid_data.get("z_func") and fluid_data["type"] == "gas":
-                scenario_data["z"] = fluid_data["z_func"](temp, p1)
-            if fluid_data.get("sg") is not None:
-                scenario_data["sg"] = fluid_data["sg"]
-        
+        # Always use calculated values - no editing allowed for dependent properties
         if fluid_type in ["liquid", "gas"]:
+            sg_display_value = calc_sg if fluid_library != "Select Fluid Library..." else scenario_data.get("sg", 1.0)
+            sg_label = "Specific Gravity (water=1)" if fluid_type == "liquid" else "Specific Gravity (air=1)"
             sg = st.number_input(
-                "Specific Gravity (water=1)" if fluid_type == "liquid" else "Specific Gravity (air=1)",
+                sg_label,
                 min_value=0.01, 
                 max_value=10.0, 
-                value=scenario_data["sg"], 
+                value=sg_display_value, 
                 step=0.01,
                 key=f"sg_{scenario_num}",
-                disabled=(fluid_library != "Select Fluid Library...")
+                disabled=True  # Always disabled - calculated value
             )
         
         if fluid_type == "liquid":
+            visc_display_value = calc_visc if fluid_library != "Select Fluid Library..." else scenario_data.get("visc", 1.0)
             visc = st.number_input(
                 "Viscosity (cSt)", 
                 min_value=0.01, 
                 max_value=10000.0, 
-                value=scenario_data["visc"], 
+                value=visc_display_value, 
                 step=0.1,
                 key=f"visc_{scenario_num}",
-                disabled=(fluid_library != "Select Fluid Library...")
+                disabled=True  # Always disabled - calculated value
             )
+            pv_display_value = calc_pv if fluid_library != "Select Fluid Library..." else scenario_data.get("pv", 0.023)
             pv = st.number_input(
                 "Vapor Pressure (bar a)", 
                 min_value=0.0, 
                 max_value=100.0, 
-                value=scenario_data["pv"], 
+                value=pv_display_value, 
                 step=0.0001,
                 format="%.4f",
                 key=f"pv_{scenario_num}",
-                disabled=(fluid_library != "Select Fluid Library...")
+                disabled=True  # Always disabled - calculated value
             )
+            pc_display_value = calc_pc if fluid_library != "Select Fluid Library..." else scenario_data.get("pc", 220.55)
             pc = st.number_input(
                 "Critical Pressure (bar a)", 
                 min_value=0.0, 
                 max_value=1000.0, 
-                value=scenario_data["pc"], 
+                value=pc_display_value, 
                 step=0.1,
                 key=f"pc_{scenario_num}",
-                disabled=(fluid_library != "Select Fluid Library...")
+                disabled=True  # Always disabled - calculated value
             )
         
         if fluid_type in ["gas", "steam"]:
+            k_display_value = calc_k if fluid_library != "Select Fluid Library..." else scenario_data.get("k", 1.4)
             k = st.number_input(
                 "Specific Heat Ratio (k=Cp/Cv)", 
                 min_value=1.0, 
                 max_value=2.0, 
-                value=scenario_data["k"], 
+                value=k_display_value, 
                 step=0.01,
                 key=f"k_{scenario_num}",
-                disabled=(fluid_library != "Select Fluid Library...")
+                disabled=True  # Always disabled - calculated value
             )
         
         if fluid_type == "gas":
-            # Show Z as disabled if fluid library is selected, else editable
-            if fluid_library != "Select Fluid Library...":
-                z = st.number_input(
-                    "Compressibility Factor (Z)", 
-                    min_value=0.1, 
-                    max_value=2.0, 
-                    value=scenario_data["z"], 
-                    step=0.01,
-                    key=f"z_{scenario_num}",
-                    disabled=True  # Disabled for library fluids
-                )
-            else:
-                z = st.number_input(
-                    "Compressibility Factor (Z)", 
-                    min_value=0.1, 
-                    max_value=2.0, 
-                    value=scenario_data["z"], 
-                    step=0.01,
-                    key=f"z_{scenario_num}",
-                    disabled=False
-                )
+            z_display_value = calc_z if fluid_library != "Select Fluid Library..." else scenario_data.get("z", 1.0)
+            z = st.number_input(
+                "Compressibility Factor (Z)", 
+                min_value=0.1, 
+                max_value=2.0, 
+                value=z_display_value, 
+                step=0.01,
+                key=f"z_{scenario_num}",
+                disabled=True  # Always disabled - calculated value
+            )
         
         if fluid_type == "steam":
+            rho_display_value = calc_rho if fluid_library != "Select Fluid Library..." else scenario_data.get("rho", 1.0)
             rho = st.number_input(
                 "Density (kg/m³)", 
                 min_value=0.01, 
                 max_value=2000.0, 
-                value=scenario_data["rho"], 
+                value=rho_display_value, 
                 step=0.1,
                 key=f"rho_{scenario_num}",
-                disabled=(fluid_library != "Select Fluid Library...")
+                disabled=True  # Always disabled - calculated value
             )
         
-        # Add checkbox for pipe size option - default to True
+        # Add checkbox for pipe size option
         use_valve_size = st.checkbox(
             "Use valve size for pipe diameter?",
             value=scenario_data.get("use_valve_size", True),
@@ -1981,26 +1997,40 @@ def scenario_input_form(scenario_num, scenario_data=None):
                 key=f"pipe_d_{scenario_num}"
             )
         else:
-            pipe_d = scenario_data["pipe_d"]  # Keep existing value but won't be used
+            pipe_d = scenario_data["pipe_d"]
     
-    return {
+    # Return the appropriate values based on fluid type
+    result = {
         "name": scenario_name,
         "fluid_type": fluid_type,
         "flow": flow_value,
         "p1": p1,
         "p2": p2,
         "temp": temp,
-        "sg": sg if fluid_type in ["liquid", "gas"] else scenario_data["sg"],
-        "visc": visc if fluid_type == "liquid" else scenario_data["visc"],
-        "pv": pv if fluid_type == "liquid" else scenario_data["pv"],
-        "pc": pc if fluid_type == "liquid" else scenario_data["pc"],
-        "k": k if fluid_type in ["gas", "steam"] else scenario_data["k"],
-        "z": z if fluid_type == "gas" else scenario_data["z"],
-        "rho": rho if fluid_type == "steam" else scenario_data["rho"],
         "pipe_d": pipe_d,
         "use_valve_size": use_valve_size,
         "fluid_library": fluid_library
     }
+    
+    # Add fluid-specific properties
+    if fluid_type in ["liquid", "gas"]:
+        result["sg"] = sg_display_value if fluid_library != "Select Fluid Library..." else scenario_data.get("sg", 1.0)
+    
+    if fluid_type == "liquid":
+        result["visc"] = visc_display_value if fluid_library != "Select Fluid Library..." else scenario_data.get("visc", 1.0)
+        result["pv"] = pv_display_value if fluid_library != "Select Fluid Library..." else scenario_data.get("pv", 0.023)
+        result["pc"] = pc_display_value if fluid_library != "Select Fluid Library..." else scenario_data.get("pc", 220.55)
+    
+    if fluid_type in ["gas", "steam"]:
+        result["k"] = k_display_value if fluid_library != "Select Fluid Library..." else scenario_data.get("k", 1.4)
+    
+    if fluid_type == "gas":
+        result["z"] = z_display_value if fluid_library != "Select Fluid Library..." else scenario_data.get("z", 1.0)
+    
+    if fluid_type == "steam":
+        result["rho"] = rho_display_value if fluid_library != "Select Fluid Library..." else scenario_data.get("rho", 1.0)
+    
+    return result
 
 def plot_cv_curve(valve, op_points, req_cvs, theoretical_cvs, scenario_names):
     # Get valve's Cv characteristics
