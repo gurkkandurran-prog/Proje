@@ -134,7 +134,7 @@ FLUID_LIBRARY = {
     "Natural Gas": {
         "type": "gas",
         "coolprop_name": "Methane",  # Using methane as approximation for natural gas
-        "sg": 0.65,  # Typical specific gravity for natural gas (range: 0.55-0.75)
+        "sg": 0.6,  # Typical specific gravity for natural gas (range: 0.55-0.75)
         "visc_func": None,
         "k_func": lambda t, p: calculate_specific_heat_ratio("Methane", t, p),
         "z_func": lambda t, p: calculate_compressibility_factor("Methane", t, p),
