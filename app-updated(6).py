@@ -130,6 +130,18 @@ FLUID_LIBRARY = {
         "pv_func": None,
         "rho_func": lambda t, p: calculate_density_mixture(t, p, 0.2, 0.8, "Hydrogen", "Methane")
     },
+
+    "Natural Gas": {
+        "type": "gas",
+        "coolprop_name": "Methane",  # Using methane as approximation for natural gas
+        "sg": 0.65,  # Typical specific gravity for natural gas (range: 0.55-0.75)
+        "visc_func": None,
+        "k_func": lambda t, p: calculate_specific_heat_ratio("Methane", t, p),
+        "z_func": lambda t, p: calculate_compressibility_factor("Methane", t, p),
+        "pv_func": None,
+        "rho_func": lambda t, p: calculate_density("Methane", t, p)
+    },
+    
     "Octane": {
         "type": "liquid",
         "coolprop_name": "Octane",
