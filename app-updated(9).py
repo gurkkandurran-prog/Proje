@@ -1,4 +1,5 @@
-
+[file name]: app-updated(10).py
+[file content begin]
 from valve_database import load_valves_from_excel, add_valve_to_database, delete_valve_from_database
 from valve import Valve
 from scipy.interpolate import CubicSpline
@@ -1754,8 +1755,6 @@ def update_fluid_properties(scenario_num, fluid_library, temp, p1):
             fluid_data = FLUID_LIBRARY[fluid_library]
             
             # Update session state with recalculated properties
-            st.session_state[f"fluid_type_{scenario_num}"] = fluid_data["type"]
-            
             if fluid_data["type"] == "liquid":
                 if fluid_data.get("visc_func"):
                     st.session_state[f"visc_{scenario_num}"] = fluid_data["visc_func"](temp, p1)
@@ -1899,15 +1898,12 @@ def scenario_input_form(scenario_num, scenario_data=None):
     
     with col2:
         # Check if fluid library, temperature or pressure have changed and update properties
-        current_fluid_library = st.session_state.get(f"fluid_library_{scenario_num}", "Select Fluid Library...")
-        current_temp = st.session_state.get(f"temp_{scenario_num}", 20.0)
-        current_p1 = st.session_state.get(f"p1_{scenario_num}", 10.0)
+        current_fluid_library = fluid_library
+        current_temp = temp
+        current_p1 = p1
         
-        # Update fluid properties when any of these change
-        if (current_fluid_library != "Select Fluid Library..." and 
-            (f"fluid_library_{scenario_num}" in st.session_state._new_session_state or
-             f"temp_{scenario_num}" in st.session_state._new_session_state or
-             f"p1_{scenario_num}" in st.session_state._new_session_state)):
+        # Always recalculate fluid properties when fluid library, temperature, or pressure changes
+        if current_fluid_library != "Select Fluid Library...":
             update_fluid_properties(scenario_num, current_fluid_library, current_temp, current_p1)
         
         # Use session state values if available, otherwise use scenario data
@@ -2523,338 +2519,428 @@ def main():
     with tab3:
         scenario3 = scenario_input_form(3)
     
-    scenarios = [scenario1, scenario2, scenario3]
+    scenarios = []
+    if scenario1["flow"] > 0:
+        scenarios.append(scenario1)
+    if scenario2["flow"] > 0:
+        scenarios.append(scenario2)
+    if scenario3["flow"] > 0:
+        scenarios.append(scenario3)
+    st.session_state.scenarios = scenarios
     
     if calculate_btn:
-        with st.spinner("Calculating valve opening points..."):
-            st.session_state.scenarios = scenarios
-            st.session_state.valve = selected_valve
-            
-            # Calculate for selected valve
-            results = []
-            for i, scenario in enumerate(scenarios):
+        if not scenarios:
+            st.error("Please define at least one scenario with flow > 0.")
+            st.stop()
+        try:
+            selected_valve_results = []
+            for scenario in scenarios:
                 result = evaluate_valve_for_scenario(selected_valve, scenario)
-                results.append(result)
-            
-            st.session_state.results = results
-            
-            # Find recommended valve
-            st.session_state.recommended_valve, st.session_state.all_valve_results = find_recommended_valve(scenarios)
+                selected_valve_results.append(result)
+            recommended_valve, all_valve_results = find_recommended_valve(scenarios)
+            st.session_state.results = {
+                "selected_valve": selected_valve,
+                "selected_valve_results": selected_valve_results,
+                "recommended_valve": recommended_valve,
+                "all_valve_results": all_valve_results
+            }
+        except Exception as e:
+            st.error(f"Calculation error: {str(e)}")
+            st.error(traceback.format_exc())
     
     with tab_results:
-        if st.session_state.results is not None:
-            st.header("Sizing Results")
+        if st.session_state.results:
+            results = st.session_state.results
+            selected_valve = results["selected_valve"]
+            selected_valve_results = results["selected_valve_results"]
+            recommended_valve = results["recommended_valve"]
             
-            col1, col2, col3 = st.columns([2, 1, 1])
-            with col1:
-                st.subheader(f"Results for {get_valve_display_name(selected_valve)}")
-            
-            with col2:
-                if st.session_state.recommended_valve:
-                    recommended_name = st.session_state.recommended_valve["display_name"]
-                    if recommended_name != get_valve_display_name(selected_valve):
-                        st.warning(f"Recommended: {recommended_name}")
-                    else:
-                        st.success("✅ This valve is recommended")
-            
-            with col3:
-                if st.button("📊 Generate All Plots"):
-                    with st.spinner("Generating plots..."):
-                        plot_bytes = None
-                        flow_dp_plot_bytes = None
-                        
-                        # Generate CV curve plot
-                        op_points = [r["op_point"] for r in st.session_state.results]
-                        req_cvs = [r["req_cv"] for r in st.session_state.results]
-                        theoretical_cvs = [r["theoretical_cv"] for r in st.session_state.results]
-                        scenario_names = [s["name"] for s in st.session_state.scenarios]
-                        
-                        cv_fig = plot_cv_curve(selected_valve, op_points, req_cvs, theoretical_cvs, scenario_names)
-                        plot_bytes = cv_fig.to_image(format="png", width=1200, height=800)
-                        
-                        # Generate flow vs DP plot for first scenario
-                        if st.session_state.scenarios and st.session_state.results:
-                            flow_dp_fig = generate_flow_vs_dp_graph(
-                                st.session_state.scenarios[0], 
-                                selected_valve, 
-                                st.session_state.results[0]["op_point"],
-                                st.session_state.results[0]["details"],
-                                st.session_state.results[0]["req_cv"]
-                            )
-                            flow_dp_plot_bytes = flow_dp_fig.to_image(format="png", width=1000, height=600)
-                        
-                        st.session_state.plot_bytes = plot_bytes
-                        st.session_state.flow_dp_plot_bytes = flow_dp_plot_bytes
-            
-            # Results for each scenario
-            for i, (scenario, result) in enumerate(zip(scenarios, st.session_state.results)):
-                st.markdown("---")
+            if recommended_valve:
+                st.subheader("Recommended Valve")
+                st.markdown(f"**{recommended_valve['display_name']}** - Score: {recommended_valve['score']:.1f}")
                 
-                col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
-                
-                with col1:
-                    st.metric(
-                        label=f"Scenario {i+1}: {scenario['name']}",
-                        value=f"{result['op_point']:.1f}%",
-                        delta=f"Margin: {result['margin']:.1f}%"
-                    )
-                
-                with col2:
-                    st.metric(
-                        label="Required Cv",
-                        value=f"{result['req_cv']:.1f}"
-                    )
-                
-                with col3:
-                    actual_cv = selected_valve.get_cv_at_opening(result['op_point'])
-                    st.metric(
-                        label="Actual Cv",
-                        value=f"{actual_cv:.1f}"
-                    )
-                
-                with col4:
-                    orifice_vel = result.get('orifice_velocity', 0)
-                    inlet_vel = result.get('inlet_velocity', 0)
-                    st.metric(
-                        label="Velocities (m/s)",
-                        value=f"Orifice: {orifice_vel:.1f}",
-                        delta=f"Inlet: {inlet_vel:.1f}"
-                    )
-                
-                # Warning and cavitation cards
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if result['warning']:
-                        css_class = "warning-card"
-                        if "Insufficient" in result['warning']:
-                            css_class = "insufficient-card"
-                        elif "High velocity" in result['warning']:
-                            css_class = "velocity-card"
-                        st.markdown(f'<div class="result-card {css_class}">⚠️ **Warning:** {result["warning"]}</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown('<div class="result-card success-card">✅ No warnings</div>', unsafe_allow_html=True)
-                
-                with col2:
-                    cavitation_msg = result['cavitation_info']
-                    css_class = "success-card"
-                    if "Severe" in cavitation_msg:
-                        css_class = "danger-card"
-                    elif "Moderate" in cavitation_msg:
-                        css_class = "warning-card"
-                    elif "Choked" in cavitation_msg:
-                        css_class = "cavitation-card"
-                    st.markdown(f'<div class="result-card {css_class}">💧 **Cavitation:** {cavitation_msg}</div>', unsafe_allow_html=True)
-                
-                # Detailed results expander
-                with st.expander(f"Detailed Results for {scenario['name']}"):
-                    col1, col2 = st.columns(2)
+                # Show each scenario result for recommended valve in card layout
+                for i, scenario in enumerate(scenarios):
+                    result = recommended_valve["results"][i]
+                    actual_cv = recommended_valve["valve"].get_cv_at_opening(result["op_point"])
                     
-                    with col1:
-                        st.markdown("**Process Conditions**")
-                        st.write(f"- Fluid: {scenario['fluid_type'].capitalize()}")
-                        st.write(f"- Flow: {scenario['flow']} "
-                                 f"{'m³/h' if scenario['fluid_type']=='liquid' else 'kg/h' if scenario['fluid_type']=='steam' else 'std m³/h'}")
-                        st.write(f"- P1: {scenario['p1']:.2f} bar a")
-                        st.write(f"- P2: {scenario['p2']:.2f} bar a")
-                        st.write(f"- ΔP: {scenario['p1'] - scenario['p2']:.2f} bar")
-                        st.write(f"- Temperature: {scenario['temp']}°C")
-                        st.write(f"- Pipe Diameter: {scenario['pipe_d']} in")
-                        
-                        st.markdown("**Fluid Properties**")
-                        if scenario['fluid_type'] == "liquid":
-                            st.write(f"- Specific Gravity: {scenario['sg']:.3f}")
-                            st.write(f"- Viscosity: {scenario['visc']} cSt")
-                            st.write(f"- Vapor Pressure: {scenario['pv']:.4f} bar a")
-                            st.write(f"- Critical Pressure: {scenario['pc']:.2f} bar a")
-                        elif scenario['fluid_type'] == "gas":
-                            st.write(f"- Specific Gravity (air=1): {scenario['sg']:.3f}")
-                            st.write(f"- Specific Heat Ratio (k): {scenario['k']:.3f}")
-                            st.write(f"- Compressibility Factor (Z): {scenario['z']:.3f}")
-                        else:
-                            st.write(f"- Density: {scenario['rho']:.3f} kg/m³")
-                            st.write(f"- Specific Heat Ratio (k): {scenario['k']:.3f}")
+                    # Determine status class
+                    status_class = ""
+                    if "Insufficient" in result["warning"]:
+                        status_class = "insufficient-card"
+                    elif "High velocity" in result["warning"]:
+                        status_class = "velocity-card"
+                    elif result["status"] == "green":
+                        status_class = "success-card"
+                    elif result["status"] == "yellow":
+                        status_class = "warning-card"
+                    elif result["status"] == "orange":
+                        status_class = "cavitation-card"
+                    elif result["status"] == "red":
+                        status_class = "danger-card"
                     
-                    with col2:
-                        st.markdown("**Calculation Details**")
-                        details = result['details']
-                        if 'error' in details:
-                            st.error(f"Calculation Error: {details['error']}")
-                        else:
-                            st.write(f"- Theoretical Cv: {details.get('theoretical_cv', 0):.1f}")
-                            st.write(f"- Piping Factor (Fp): {details.get('fp', 1.0):.3f}")
-                            st.write(f"- Reynolds Number: {details.get('reynolds', 0):.0f}")
-                            
-                            if scenario['fluid_type'] == "liquid":
-                                st.write(f"- Viscosity Correction (Fr): {details.get('fr', 1.0):.3f}")
-                                st.write(f"- Liquid Critical Flow Factor (Ff): {details.get('ff', 0.96):.3f}")
-                                st.write(f"- Choked Flow: {'Yes' if details.get('is_choked', False) else 'No'}")
-                                st.write(f"- Max Allowable ΔP: {details.get('dp_max', 0):.2f} bar")
-                            
-                            elif scenario['fluid_type'] == "gas":
-                                st.write(f"- Expansion Factor (Y): {details.get('expansion_factor', 0):.3f}")
-                                st.write(f"- Pressure Drop Ratio (x): {details.get('x_actual', 0):.4f}")
-                                st.write(f"- Critical Pressure Drop Ratio: {details.get('x_crit', 0):.4f}")
-                                st.write(f"- Choked Flow: {'Yes' if details.get('is_choked', False) else 'No'}")
-                                st.write(f"- Xt at Operating Point: {details.get('xt_at_op', 0):.4f}")
-                            
-                            else:  # steam
-                                st.write(f"- Expansion Factor (Y): {details.get('expansion_factor', 0):.3f}")
-                                st.write(f"- Pressure Drop Ratio (x): {details.get('x_actual', 0):.4f}")
-                                st.write(f"- Critical Pressure Drop Ratio: {details.get('x_crit', 0):.4f}")
-                                st.write(f"- Choked Flow: {'Yes' if details.get('is_choked', False) else 'No'}")
-                                st.write(f"- Xt at Operating Point: {details.get('xt_at_op', 0):.4f}")
-                        
-                        st.markdown("**Velocities**")
-                        st.write(f"- Orifice Velocity: {result.get('orifice_velocity', 0):.1f} m/s")
-                        st.write(f"- Inlet Velocity: {result.get('inlet_velocity', 0):.1f} m/s")
-                        
-                        # Velocity limits
-                        velocity_limit = VELOCITY_LIMITS.get(scenario['fluid_type'], 10)
-                        inlet_vel = result.get('inlet_velocity', 0)
-                        if inlet_vel > velocity_limit:
-                            st.error(f"High velocity! Limit: {velocity_limit} m/s")
-                        else:
-                            st.success(f"Velocity OK (Limit: {velocity_limit} m/s)")
-            
-            # CV Characteristic Curve
-            st.markdown("---")
-            st.subheader("Valve Cv Characteristic Curve")
-            
-            op_points = [r["op_point"] for r in st.session_state.results]
-            req_cvs = [r["req_cv"] for r in st.session_state.results]
-            theoretical_cvs = [r["theoretical_cv"] for r in st.session_state.results]
-            scenario_names = [s["name"] for s in st.session_state.scenarios]
-            
-            cv_fig = plot_cv_curve(selected_valve, op_points, req_cvs, theoretical_cvs, scenario_names)
-            st.plotly_chart(cv_fig, use_container_width=True)
-            
-            # Flow vs Pressure Drop for first scenario
-            if st.session_state.scenarios and st.session_state.results:
-                st.subheader(f"Flow Rate vs Pressure Drop - {st.session_state.scenarios[0]['name']}")
-                flow_dp_fig = generate_flow_vs_dp_graph(
-                    st.session_state.scenarios[0], 
-                    selected_valve, 
-                    st.session_state.results[0]["op_point"],
-                    st.session_state.results[0]["details"],
-                    st.session_state.results[0]["req_cv"]
-                )
-                st.plotly_chart(flow_dp_fig, use_container_width=True)
-            
-            # Alternative valve recommendations
-            if st.session_state.all_valve_results:
-                st.markdown("---")
-                st.subheader("Alternative Valve Recommendations")
+                    # Combine warnings
+                    warn_msgs = []
+                    if result["warning"]:
+                        warn_msgs.append(result["warning"])
+                    if result["cavitation_info"]:
+                        warn_msgs.append(result["cavitation_info"])
+                    warn_text = ", ".join(warn_msgs)
+                    
+                    with st.container():
+                        st.markdown(f"<div class='result-card {status_class}'>", unsafe_allow_html=True)
+                        cols = st.columns([1.8, 1, 1, 1, 1, 1, 1, 1.5])
+                        cols[0].markdown(f"**{scenario['name']}**")
+                        cols[1].metric("Req Cv", f"{result['req_cv']:.1f}")
+                        cols[2].metric("Theo Cv", f"{result['theoretical_cv']:.2f}")
+                        cols[3].metric("Valve Cv", f"{actual_cv:.1f}")
+                        cols[4].metric("Valve Size", f"{recommended_valve['valve'].size}\"")
+                        cols[5].metric("Opening", f"{result['op_point']:.1f}%")
+                        cols[6].metric("Margin", f"{result['margin']:.1f}%", 
+                                      delta_color="inverse" if result['margin'] < 0 else "normal")
+                        cols[7].markdown(f"**{warn_text}**")
+                        st.markdown("</div>", unsafe_allow_html=True)
                 
-                # Sort by score (descending) and take top 10
-                sorted_valves = sorted(st.session_state.all_valve_results, key=lambda x: x["score"], reverse=True)[:10]
-                
-                # Create comparison table
-                comparison_data = []
-                for valve_result in sorted_valves:
-                    valve = valve_result["valve"]
-                    results = valve_result["results"]
-                    score = valve_result["score"]
-                    display_name = valve_result["display_name"]
-                    
-                    # Calculate average opening and margin
-                    avg_opening = np.mean([r["op_point"] for r in results])
-                    avg_margin = np.mean([r["margin"] for r in results])
-                    
-                    # Count warnings
-                    warning_count = sum(1 for r in results if r["warning"])
-                    cavitation_count = sum(1 for r in results if "Severe" in r["cavitation_info"] or "Choked" in r["cavitation_info"])
-                    
-                    comparison_data.append({
-                        "Valve": display_name,
-                        "Score": f"{score:.0f}",
-                        "Avg Opening": f"{avg_opening:.1f}%",
-                        "Avg Margin": f"{avg_margin:.1f}%",
-                        "Warnings": warning_count,
-                        "Critical Issues": cavitation_count
-                    })
-                
-                comparison_df = pd.DataFrame(comparison_data)
-                st.dataframe(comparison_df, hide_index=True, use_container_width=True)
-        
-        elif st.session_state.show_3d_viewer:
-            st.header("3D Valve Model Viewer")
-            valve_name = get_valve_display_name(selected_valve)
-            model_url = VALVE_MODELS.get(valve_name, "")
-            if model_url:
-                valve_3d_viewer(valve_name, model_url)
+                with st.expander("Why this valve is recommended"):
+                    st.markdown("""
+                    - **Green status**: Optimal performance (good operating range, no cavitation)
+                    - **Yellow status**: Acceptable but suboptimal (moderate cavitation or bad opening)
+                    - **Orange status**: Severe cavitation risk
+                    - **Red status**: Choked flow (unacceptable)
+                    - **Dark red**: Insufficient capacity (valve undersized)
+                    - **Pink**: High velocity warning
+                    """)
+                    st.markdown(f"""
+                    **Selection criteria**:
+                    - Highest overall score considering operating point, cavitation risk, and flow conditions
+                    - Valve size: {recommended_valve['valve'].size}\"
+                    - Valve type: {'Globe' if recommended_valve['valve'].valve_type == 3 else 'Axial'}
+                    """)
             else:
-                st.warning(f"3D model not available for {valve_name}")
-        
-        elif st.session_state.show_simulation:
-            st.header("CFD Simulation Results")
-            valve_name = get_valve_display_name(selected_valve)
-            simulation_image_url = get_simulation_image(valve_name)
-            st.image(simulation_image_url, caption=f"CFD Simulation - {valve_name}", use_container_width=True)
+                st.warning("No suitable valve found for all scenarios. Consider modifying your scenarios.")
             
+            st.subheader(f"Selected Valve: {get_valve_display_name(selected_valve)} Cv Characteristic")
+            fig = plot_cv_curve(
+                selected_valve, 
+                [r["op_point"] for r in selected_valve_results],
+                [r["req_cv"] for r in selected_valve_results],
+                [r["theoretical_cv"] for r in selected_valve_results],
+                [s["name"] for s in scenarios]
+            )
+            st.plotly_chart(fig, use_container_width=True, key="main_cv_curve")
+            
+            st.subheader("Selected Valve Performance")
+            for i, scenario in enumerate(scenarios):
+                result = selected_valve_results[i]
+                actual_cv = selected_valve.get_cv_at_opening(result["op_point"])
+                status = "success-card"
+                if "Insufficient" in result["warning"]:
+                    status = "insufficient-card"
+                elif "High velocity" in result["warning"]:
+                    status = "velocity-card"
+                elif result["status"] == "yellow":
+                    status = "warning-card"
+                elif result["status"] == "orange":
+                    status = "cavitation-card"
+                elif result["status"] == "red":
+                    status = "danger-card"
+                warn_msgs = []
+                if result["warning"]:
+                    warn_msgs.append(result["warning"])
+                if result["cavitation_info"]:
+                    warn_msgs.append(result["cavitation_info"])
+                warn_text = ", ".join(warn_msgs)
+                
+                with st.container():
+                    st.markdown(f"<div class='result-card {status}'>", unsafe_allow_html=True)
+                    cols = st.columns([1.8, 1, 1, 1, 1, 1, 1, 1.5])
+                    cols[0].markdown(f"**{scenario['name']}**")
+                    cols[1].metric("Req Cv", f"{result['req_cv']:.1f}")
+                    cols[2].metric("Theo Cv", f"{result['theoretical_cv']:.2f}")
+                    cols[3].metric("Valve Cv", f"{actual_cv:.1f}")
+                    cols[4].metric("Valve Size", f"{selected_valve.size}\"")
+                    cols[5].metric("Opening", f"{result['op_point']:.1f}%")
+                    cols[6].metric("Margin", f"{result['margin']:.1f}%", 
+                                  delta_color="inverse" if result['margin'] < 0 else "normal")
+                    cols[7].markdown(f"**{warn_text}**")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                    with st.expander(f"Detailed Calculations for {scenario['name']}"):
+                        st.subheader("Calculation Parameters")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            # Fixed Fl display
+                            fl_at_op = result['details'].get('fl_at_op', 'N/A')
+                            if isinstance(fl_at_op, (int, float)):
+                                st.markdown(f"**Fl (Liquid Recovery):** {fl_at_op:.3f}")
+                            else:
+                                st.markdown(f"**Fl (Liquid Recovery):** {fl_at_op}")
+                                
+                            st.markdown(f"**Fd (Valve Style Modifier):** {selected_valve.fd:.2f}")
+                            
+                            # Fixed Fp display
+                            fp_val = result['details'].get('fp', 1.0)
+                            if isinstance(fp_val, (int, float)):
+                                st.markdown(f"**Fp (Piping Factor):** {fp_val:.4f}")
+                            else:
+                                st.markdown(f"**Fp (Piping Factor):** {fp_val}")
+                            
+                        with col2:
+                            if scenario["fluid_type"] == "liquid":
+                                # Fixed FF display
+                                ff_val = result['details'].get('ff', 0.96)
+                                if isinstance(ff_val, (int, float)):
+                                    st.markdown(f"**FF (Critical Pressure Ratio):** {ff_val:.4f}")
+                                else:
+                                    st.markdown(f"**FF (Critical Pressure Ratio):** {ff_val}")
+                                    
+                                # Fixed Fr display
+                                fr_val = result['details'].get('fr', 1.0)
+                                if isinstance(fr_val, (int, float)):
+                                    st.markdown(f"**Fr (Viscosity Correction):** {fr_val:.4f}")
+                                else:
+                                    st.markdown(f"**Fr (Viscosity Correction):** {fr_val}")
+                                
+                                # Fixed Reynolds display
+                                reynolds_val = result['details'].get('reynolds', 0)
+                                if isinstance(reynolds_val, (int, float)):
+                                    st.markdown(f"**Reynolds Number:** {reynolds_val:.0f}")
+                                else:
+                                    st.markdown(f"**Reynolds Number:** {reynolds_val}")
+                            
+
+                        # Fixed ΔPmax display
+                        dp_max_val = result['details'].get('dp_max', 0)
+                        if isinstance(dp_max_val, (int, float)):
+                            st.markdown(f"**Max Pressure Drop (ΔPmax):** {dp_max_val:.2f} bar")
+                        else:
+                            st.markdown(f"**Max Pressure Drop (ΔPmax):** {dp_max_val} bar")
+                            
+                        # Fixed velocity display
+                        orifice_velocity_val = result.get('orifice_velocity', 0)
+                        inlet_velocity_val = result.get('inlet_velocity', 0)
+                        if isinstance(orifice_velocity_val, (int, float)) and isinstance(inlet_velocity_val, (int, float)):
+                            st.markdown(f"**Average Velocity in Valve Orifice at Opening:** {orifice_velocity_val:.2f} m/s")
+                            st.markdown(f"**Average Velocity in Valve Inlet:** {inlet_velocity_val:.2f} m/s")
+                        else:
+                            st.markdown(f"**Average Velocity in Valve Orifice at Opening:** {orifice_velocity_val} m/s")
+                            st.markdown(f"**Average Velocity in Valve Inlet:** {inlet_velocity_val} m/s")
+                        
+                        # Velocity warning if present
+                        if "High velocity" in result["warning"]:
+                            st.warning(f"**Velocity Warning:** {result['warning']}")
+                        
+                        if scenario["fluid_type"] == "liquid":
+                            if result["details"].get('cavitation_severity'):
+                                st.subheader("Cavitation Analysis")
+                                st.markdown(f"**Status:** {result['details']['cavitation_severity']}")
+                                
+                                # Fixed sigma display
+                                sigma_val = result['details'].get('sigma', 0)
+                                if isinstance(sigma_val, (int, float)):
+                                    st.markdown(f"**Sigma (σ):** {sigma_val:.2f}")
+                                else:
+                                    st.markdown(f"**Sigma (σ):** {sigma_val}")
+                                
+                                # Fixed Km display
+                                km_val = result['details'].get('km', 0)
+                                if isinstance(km_val, (int, float)):
+                                    st.markdown(f"**Km (Valve Recovery Coefficient):** {km_val:.2f}")
+                                else:
+                                    st.markdown(f"**Km (Valve Recovery Coefficient):** {km_val}")
+                        
+                        if scenario["fluid_type"] in ["gas", "steam"]:
+
+                            # Add alternative Cv calculation display
+                            cv_alternative = result['details'].get('cv_alternative', 0)
+                            if isinstance(cv_alternative, (int, float)) and cv_alternative > 0:
+                                st.markdown(f"**Alternative Cv (x_actual, Y=0.667):** {cv_alternative:.1f}")
+                                
+                                # Calculate percentage difference
+                                theoretical_cv = result['theoretical_cv']
+                                if theoretical_cv > 0:
+                                    diff_percent = ((cv_alternative - theoretical_cv) / theoretical_cv) * 100
+                                    st.markdown(f"**Difference from theoretical Cv:** {diff_percent:+.1f}%")
+                                
+                                st.markdown(f"**Method:** {result['details'].get('alternative_method', 'N/A')}")
+                                
+                                # Add explanation
+                                with st.expander("Explanation of Alternative Calculation"):
+                                    st.markdown("""
+                                    **Alternative Cv Calculation Method:**
+                                    - Uses **x_actual** (actual pressure drop ratio) instead of x_crit
+                                    - Uses **constant Y=0.667** (choked flow expansion factor)
+                                    - This shows what the Cv would be if we treated the flow as choked regardless of the actual x_crit value
+                                    
+                                    **When to use this comparison:**
+                                    - When x_actual is close to x_crit but slightly below
+                                    - To understand the sensitivity of Cv to expansion factor assumptions
+                                    - For conservative sizing approaches
+                                    """)
+
+                            st.subheader("Choked Flow Analysis")
+                            st.markdown(f"**Status:** {result['cavitation_info']}")
+                            
+                            # Fixed x_actual display
+                            x_actual_val = result['details'].get('x_actual', 0)
+                            if isinstance(x_actual_val, (int, float)):
+                                st.markdown(f"**Pressure Drop Ratio (x):** {x_actual_val:.4f}")
+                            else:
+                                st.markdown(f"**Pressure Drop Ratio (x):** {x_actual_val}")
+                            
+                            # Fixed x_crit display
+                            x_crit_val = result['details'].get('x_crit', 0)
+                            if isinstance(x_crit_val, (int, float)):
+                                st.markdown(f"**Critical Pressure Drop Ratio (x_crit):** {x_crit_val:.4f}")
+                            else:
+                                st.markdown(f"**Critical Pressure Drop Ratio (x_crit):** {x_crit_val}")
+                            
+                            # Fixed xt_at_op display
+                            xt_at_op_val = result['details'].get('xt_at_op', 0)
+                            xt_op_point = result['details'].get('xt_op_point', 'N/A')
+                            if isinstance(xt_at_op_val, (int, float)):
+                                st.markdown(f"**Pressure Drop Ratio Factor (xT or xTP):** {xt_at_op_val:.4f}")
+                                if xt_op_point != 'N/A':
+                                    st.markdown(f"*Calculated at {xt_op_point}% opening*")
+                            else:
+                                st.markdown(f"**Pressure Drop Ratio Factor (xT or xTP):** {xt_at_op_val}")
+                            
+                            # Fixed choked pressure drop display
+                            if isinstance(x_crit_val, (int, float)) and isinstance(scenario['p1'], (int, float)):
+                                choked_dp = x_crit_val * scenario['p1']
+                                st.markdown(f"**Choked Pressure Drop:** {choked_dp:.2f} bar")
+                            else:
+                                st.markdown("**Choked Pressure Drop:** N/A")
+                        
+                        st.subheader("Flow Rate vs Pressure Drop")
+                        flow_fig = generate_flow_vs_dp_graph(
+                            scenario,
+                            selected_valve,
+                            result["op_point"],
+                            result["details"],
+                            result["req_cv"]
+                        )
+                        st.plotly_chart(flow_fig, use_container_width=True, key=f"flow_dp_{i}")
+            
+            st.subheader("All Valves Evaluation")
             st.markdown("""
-            **Simulation Parameters:**
-            - Fluid: Water at 20°C
-            - Inlet Pressure: 10 bar
-            - Outlet Pressure: 6 bar  
-            - Flow Rate: 50 m³/h
-            - Turbulence Model: k-epsilon
-            """)
-    
-    if export_btn and st.session_state.results is not None:
-        with st.spinner("Generating PDF report..."):
-            try:
-                # Generate plots for PDF
-                op_points = [r["op_point"] for r in st.session_state.results]
-                req_cvs = [r["req_cv"] for r in st.session_state.results]
-                theoretical_cvs = [r["theoretical_cv"] for r in st.session_state.results]
-                scenario_names = [s["name"] for s in st.session_state.scenarios]
+            **Status colors**:
+            - <span style="background-color:#d4edda; padding:2px 5px;">Green</span>: Optimal
+            - <span style="background-color:#fff3cd; padding:2px 5px;">Yellow</span>: Warning (moderate issue)
+            - <span style="background-color:#ffe8cc; padding:2px 5px;">Orange</span>: Severe cavitation
+            - <span style="background-color:#f8d7da; padding:2px 5px;">Red</span>: Choked flow (unacceptable)
+            - <span style="background-color:#f8d7da; border:2px solid #8b0000; padding:2px 5px;">Dark Red</span>: Insufficient capacity
+            - <span style="background-color:#ffd8d8; padding:2px 5px;">Pink</span>: High velocity
+            """, unsafe_allow_html=True)
+            all_valves_table_html = """
+            <table class="valve-table">
+                <thead>
+                    <tr>
+                        <th>Valve</th>
+            """
+            for i, scenario in enumerate(scenarios):
+                all_valves_table_html += f'<th>{scenario["name"]} Status</th>'
+            all_valves_table_html += """
+                        <th>Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+            """
+            all_valve_results = sorted(
+                st.session_state.results["all_valve_results"], 
+                key=lambda x: x["score"], 
+                reverse=True
+            )
+            for valve_result in all_valve_results:
+                all_valves_table_html += f'<tr><td>{valve_result["display_name"]}</td>'
+                for result in valve_result["results"]:
+                    status_class = ""
+                    if "Insufficient" in result["warning"]:
+                        status_class = "status-insufficient"
+                    elif "High velocity" in result["warning"]:
+                        status_class = "status-velocity"
+                    elif result["status"] == "green":
+                        status_class = "status-green"
+                    elif result["status"] == "yellow":
+                        status_class = "status-yellow"
+                    elif result["status"] == "orange":
+                        status_class = "status-orange"
+                    elif result["status"] == "red":
+                        status_class = "status-red"
+                    all_valves_table_html += f'<td class="{status_class}">{result["status"]}</td>'
+                all_valves_table_html += f'<td>{valve_result["score"]:.1f}</td></tr>'
+            all_valves_table_html += "</tbody></table>"
+            st.markdown(all_valves_table_html, unsafe_allow_html=True)
+            
+               
+    # Handle export button
+    if export_btn:
+        if st.session_state.results is None:
+            st.error("Please run the calculation first.")
+        else:
+            with st.spinner("Generating PDF report..."):
+                # Prepare data for PDF
+                scenarios = st.session_state.scenarios
+                valve = st.session_state.results["selected_valve"]
+                op_points = [r["op_point"] for r in st.session_state.results["selected_valve_results"]]
+                req_cvs = [r["req_cv"] for r in st.session_state.results["selected_valve_results"]]
+                warnings = [r["warning"] for r in st.session_state.results["selected_valve_results"]]
+                cavitation_info = [r["cavitation_info"] for r in st.session_state.results["selected_valve_results"]]
+                theoretical_cvs = [r["theoretical_cv"] for r in st.session_state.results["selected_valve_results"]]
                 
-                # Generate matplotlib plots for PDF
-                cv_plot_bytes = plot_cv_curve_matplotlib(
-                    selected_valve, op_points, req_cvs, theoretical_cvs, scenario_names
-                )
+                # Generate the Cv curve plot for PDF
+                plot_bytes = plot_cv_curve_matplotlib(valve, op_points, req_cvs, theoretical_cvs, [s["name"] for s in scenarios])
                 
+                # Generate one Flow vs DP plot (for the first scenario) for PDF
                 flow_dp_plot_bytes = None
-                if st.session_state.scenarios and st.session_state.results:
+                if scenarios:
                     flow_dp_plot_bytes = plot_flow_vs_dp_matplotlib(
-                        st.session_state.scenarios[0], 
-                        selected_valve, 
-                        st.session_state.results[0]["op_point"],
-                        st.session_state.results[0]["details"],
-                        st.session_state.results[0]["req_cv"]
+                        scenarios[0],
+                        valve,
+                        op_points[0],
+                        st.session_state.results["selected_valve_results"][0]["details"],
+                        req_cvs[0]
                     )
                 
-                warnings = [r["warning"] for r in st.session_state.results]
-                cavitation_info = [r["cavitation_info"] for r in st.session_state.results]
-                
+                # Generate PDF
+                logo_bytes = st.session_state.logo_bytes
+                logo_type = st.session_state.logo_type
                 pdf_bytes_io = generate_pdf_report(
-                    scenarios=st.session_state.scenarios,
-                    valve=selected_valve,
-                    op_points=op_points,
-                    req_cvs=req_cvs,
-                    warnings=warnings,
-                    cavitation_info=cavitation_info,
-                    plot_bytes=cv_plot_bytes,
-                    flow_dp_plot_bytes=flow_dp_plot_bytes,
-                    logo_bytes=st.session_state.logo_bytes,
-                    logo_type=st.session_state.logo_type
+                    scenarios, valve, op_points, req_cvs, warnings, cavitation_info, 
+                    plot_bytes, flow_dp_plot_bytes, logo_bytes, logo_type
                 )
                 
-                st.success("PDF report generated successfully!")
-                
-                # Download button
+                # Offer download
+                st.success("PDF report generated!")
                 st.download_button(
-                    label="📥 Download PDF Report",
-                    data=pdf_bytes_io.getvalue(),
-                    file_name=f"valve_sizing_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
+                    label="Download PDF Report",
+                    data=pdf_bytes_io,
+                    file_name=f"Valve_Sizing_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf"
                 )
-                
-            except Exception as e:
-                st.error(f"Error generating PDF: {str(e)}")
-                st.error(traceback.format_exc())
+    
+    # Handle 3D viewer and simulation display
+    if st.session_state.show_3d_viewer:
+        valve_name = get_valve_display_name(selected_valve)
+        model_url = VALVE_MODELS.get(valve_name, None)
+        if model_url:
+            st.subheader(f"3D Model: {valve_name}")
+            valve_3d_viewer(valve_name, model_url)
+        else:
+            st.warning(f"3D model not available for {valve_name}")
+        # Add a button to close the viewer
+        if st.button("Close 3D Viewer"):
+            st.session_state.show_3d_viewer = False
+    
+    if st.session_state.show_simulation:
+        valve_name = get_valve_display_name(selected_valve)
+        sim_image_url = get_simulation_image(valve_name)
+        st.subheader(f"CFD Simulation Results: {valve_name}")
+        st.image(sim_image_url, use_container_width=True)
+        # Add a button to close the simulation
+        if st.button("Close Simulation"):
+            st.session_state.show_simulation = False
 
+# Run the main function
 if __name__ == "__main__":
     main()
