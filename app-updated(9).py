@@ -1,5 +1,4 @@
-[file name]: app-updated(10).py
-[file content begin]
+
 from valve_database import load_valves_from_excel, add_valve_to_database, delete_valve_from_database
 from valve import Valve
 from scipy.interpolate import CubicSpline
