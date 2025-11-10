@@ -586,25 +586,19 @@ def check_cavitation(p1: float, p2: float, pv: float, fl_at_op: float, pc: float
     return False, sigma, km, "Minimal cavitation risk"
 
 # ========================
-# ENHANCED PDF REPORT GENERATION
+# ENHANCED PDF REPORT GENERATION (FIXED)
 # ========================
 class EnhancedPDFReport(FPDF):
     def __init__(self, logo_bytes=None, logo_type=None):
         super().__init__(orientation='P', unit='mm', format='A4')
         self.logo_bytes = logo_bytes
         self.logo_type = logo_type
-        self.set_auto_page_break(auto=True, margin=15)
-        self.set_margins(15, 15, 15)
+        self.set_auto_page_break(auto=True, margin=20)  # Increased margin
+        self.set_margins(15, 20, 15)  # Left, Top, Right margins
         self.set_title("Control Valve Sizing Report")
         self.set_author("VASTAŞ Valve Sizing Software")
         self.alias_nb_pages()
         self.set_compression(True)
-        
-        # Add Unicode support
-        self.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
-        self.add_font('DejaVu', 'B', 'DejaVuSans-Bold.ttf', uni=True)
-        self.add_font('DejaVu', 'I', 'DejaVuSans-Oblique.ttf', uni=True)
-        self.add_font('DejaVu', 'BI', 'DejaVuSans-BoldOblique.ttf', uni=True)
         
         # Colors
         self.primary_color = (0, 51, 102)
@@ -612,6 +606,23 @@ class EnhancedPDFReport(FPDF):
         self.accent_color = (220, 20, 60)
         self.light_gray = (240, 240, 240)
         self.dark_gray = (100, 100, 100)
+        
+        # Safe width for content (considering margins)
+        self.safe_width = 180  # 210 - 15 - 15 = 180mm
+        
+    def _safe_add_fonts(self):
+        """Safely add fonts with fallback"""
+        try:
+            # Try to add DejaVu fonts
+            self.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
+            self.add_font('DejaVu', 'B', 'DejaVuSans-Bold.ttf', uni=True)
+            self.add_font('DejaVu', 'I', 'DejaVuSans-Oblique.ttf', uni=True)
+            self.add_font('DejaVu', 'BI', 'DejaVuSans-BoldOblique.ttf', uni=True)
+            return True
+        except:
+            # Fallback to built-in fonts
+            st.warning("Using built-in fonts - Unicode characters may not display correctly")
+            return False
     
     def header(self):
         if self.page_no() == 1:
@@ -619,8 +630,8 @@ class EnhancedPDFReport(FPDF):
             
         # Draw top border
         self.set_draw_color(*self.primary_color)
-        self.set_line_width(0.5)
-        self.line(10, 15, 200, 15)
+        self.set_line_width(0.3)
+        self.line(15, 20, 195, 20)
         
         # Logo
         if self.logo_bytes and self.logo_type:
@@ -628,45 +639,44 @@ class EnhancedPDFReport(FPDF):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=f".{self.logo_type.lower()}") as tmpfile:
                     tmpfile.write(self.logo_bytes)
                     tmpfile_path = tmpfile.name
-                self.image(tmpfile_path, x=15, y=8, w=20)
+                self.image(tmpfile_path, x=20, y=12, w=15, h=10)  # Fixed size
                 os.unlink(tmpfile_path)
             except Exception:
                 pass
         
         # Title
-        self.set_font('DejaVu', 'B', 10)
+        self.set_font('Arial', 'B', 9)
         self.set_text_color(*self.primary_color)
-        self.set_y(10)
-        self.cell(0, 10, 'Control Valve Sizing Report', 0, 0, 'C')
+        self.set_y(15)
+        self.cell(0, 8, 'CONTROL VALVE SIZING REPORT', 0, 0, 'C')
         
         # Page number
-        self.set_font('DejaVu', 'I', 8)
+        self.set_font('Arial', 'I', 7)
         self.set_text_color(*self.dark_gray)
-        self.set_y(10)
-        self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', 0, 0, 'R')
+        self.set_y(15)
+        self.cell(0, 8, f'Page {self.page_no()}/{{nb}}', 0, 0, 'R')
         
-        self.ln(15)
+        self.ln(12)
         
     def footer(self):
         if self.page_no() == 1:
             return
             
         self.set_y(-15)
-        self.set_font('DejaVu', 'I', 8)
+        self.set_font('Arial', 'I', 7)
         self.set_text_color(*self.dark_gray)
-        self.cell(0, 10, f'Generated on {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 0, 'L')
-        self.cell(0, 10, 'Confidential - VASTAŞ Valve Technologies', 0, 0, 'R')
+        self.cell(0, 8, f'Generated on {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 0, 'L')
+        self.cell(0, 8, 'VASTAŞ Valve Technologies', 0, 0, 'R')
     
     def cover_page(self, title, subtitle, project_info=None, client_info=None):
         self.add_page()
         
-        # Background with gradient effect
+        # Simple background
         self.set_fill_color(*self.primary_color)
-        self.rect(0, 0, 210, 297, 'F')
+        self.rect(0, 0, 210, 50, 'F')  # Header bar only
         
         # Main content area
         self.set_fill_color(255, 255, 255)
-        self.rect(15, 15, 180, 267, 'F')
         
         # Logo
         if self.logo_bytes and self.logo_type:
@@ -674,562 +684,424 @@ class EnhancedPDFReport(FPDF):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=f".{self.logo_type.lower()}") as tmpfile:
                     tmpfile.write(self.logo_bytes)
                     tmpfile_path = tmpfile.name
-                self.image(tmpfile_path, x=80, y=40, w=50)
+                self.image(tmpfile_path, x=80, y=60, w=50, h=35)
                 os.unlink(tmpfile_path)
             except Exception:
                 pass
         
         # Title
-        self.set_y(120)
-        self.set_font('DejaVu', 'B', 24)
+        self.set_y(110)
+        self.set_font('Arial', 'B', 20)
         self.set_text_color(*self.primary_color)
-        self.cell(0, 15, title, 0, 1, 'C')
+        self.cell(0, 12, title, 0, 1, 'C')
         
         # Subtitle
-        self.set_font('DejaVu', 'I', 18)
+        self.set_font('Arial', 'I', 14)
         self.set_text_color(*self.secondary_color)
-        self.cell(0, 10, subtitle, 0, 1, 'C')
+        self.cell(0, 8, subtitle, 0, 1, 'C')
         
         # Project info
         if project_info:
-            self.set_font('DejaVu', '', 14)
+            self.set_font('Arial', '', 11)
             self.set_text_color(0, 0, 0)
-            self.ln(20)
-            self.cell(0, 10, project_info, 0, 1, 'C')
+            self.ln(15)
+            self.cell(0, 8, project_info, 0, 1, 'C')
         
         # Client info
         if client_info:
             self.set_y(180)
-            self.set_font('DejaVu', 'B', 12)
+            self.set_font('Arial', 'B', 10)
             self.set_text_color(*self.primary_color)
-            self.cell(0, 8, "Prepared for:", 0, 1, 'C')
-            self.set_font('DejaVu', '', 12)
+            self.cell(0, 6, "Prepared for:", 0, 1, 'C')
+            self.set_font('Arial', '', 10)
             self.set_text_color(0, 0, 0)
-            self.multi_cell(0, 6, client_info, 0, 'C')
+            # Safe multi_cell for client info
+            self.multi_cell(0, 5, client_info, 0, 'C')
         
         # Company info
-        self.set_y(220)
-        self.set_font('DejaVu', 'B', 14)
+        self.set_y(230)
+        self.set_font('Arial', 'B', 12)
         self.set_text_color(*self.primary_color)
-        self.cell(0, 10, 'VASTAŞ Valve Technologies', 0, 1, 'C')
+        self.cell(0, 8, 'VASTAŞ Valve Technologies', 0, 1, 'C')
         
         # Date
-        self.set_font('DejaVu', 'I', 12)
+        self.set_font('Arial', 'I', 10)
         self.set_text_color(*self.dark_gray)
-        self.cell(0, 10, datetime.now().strftime("%B %d, %Y"), 0, 1, 'C')
-        
-        # Document ID
-        self.set_y(260)
-        self.set_font('DejaVu', '', 10)
-        self.set_text_color(*self.dark_gray)
-        doc_id = f"DOC-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-        self.cell(0, 5, f"Document ID: {doc_id}", 0, 0, 'C')
+        self.cell(0, 6, datetime.now().strftime("%B %d, %Y"), 0, 1, 'C')
         
         # Confidential notice
         self.set_y(270)
-        self.set_font('DejaVu', 'I', 10)
+        self.set_font('Arial', 'I', 8)
         self.set_text_color(150, 0, 0)
         self.cell(0, 5, 'CONFIDENTIAL - For authorized use only', 0, 0, 'C')
     
     def chapter_title(self, title, level=1):
+        self.ln(5)
         if level == 1:
-            self.set_font('DejaVu', 'B', 16)
+            self.set_font('Arial', 'B', 14)
             self.set_text_color(*self.primary_color)
-            self.set_fill_color(230, 240, 255)
-            self.cell(0, 12, title, 0, 1, 'L', 1)
-            self.ln(3)
-        elif level == 2:
-            self.set_font('DejaVu', 'B', 14)
-            self.set_text_color(*self.secondary_color)
-            self.cell(0, 10, title, 0, 1, 'L')
+            self.set_fill_color(240, 248, 255)
+            self.cell(0, 10, title, 0, 1, 'L', 1)
             self.ln(2)
-        else:
-            self.set_font('DejaVu', 'B', 12)
-            self.set_text_color(0, 0, 0)
+        elif level == 2:
+            self.set_font('Arial', 'B', 12)
+            self.set_text_color(*self.secondary_color)
             self.cell(0, 8, title, 0, 1, 'L')
             self.ln(1)
+        else:
+            self.set_font('Arial', 'B', 10)
+            self.set_text_color(0, 0, 0)
+            self.cell(0, 6, title, 0, 1, 'L')
     
-    def chapter_body(self, body, font_size=10, align='L'):
-        self.set_font('DejaVu', '', font_size)
+    def chapter_body(self, body, font_size=9, align='L'):
+        self.set_font('Arial', '', font_size)
         self.set_text_color(0, 0, 0)
-        self.multi_cell(0, 5, body, 0, align)
+        # Use safe multi_cell with explicit width
+        self.multi_cell(self.safe_width, 4.5, body, 0, align)
         self.ln()
     
-    def add_bullet_list(self, items, font_size=10):
-        self.set_font('DejaVu', '', font_size)
+    def add_bullet_list(self, items, font_size=9):
+        self.set_font('Arial', '', font_size)
         self.set_text_color(0, 0, 0)
         for item in items:
-            self.cell(5, 5, '', 0, 0)
-            self.multi_cell(0, 5, f"• {item}", 0, 'L')
-        self.ln()
+            # Use cell for bullet to avoid multi_cell issues
+            self.cell(5, 4, '•', 0, 0)
+            x = self.get_x()
+            y = self.get_y()
+            # Calculate available width
+            available_width = self.safe_width - (x - self.l_margin)
+            self.multi_cell(available_width, 4, f" {item}", 0, 'L')
+            self.ln(1)
+        self.ln(2)
     
-    def add_table(self, headers, data, col_widths=None, header_color=None, 
-                  row_colors=None, font_size=9, align='C'):
+    def add_table(self, headers, data, col_widths=None, header_color=None, font_size=8):
         if col_widths is None:
-            col_widths = [self.w / len(headers)] * len(headers)
+            # Distribute available width evenly
+            col_widths = [self.safe_width / len(headers)] * len(headers)
+        
+        # Ensure total width doesn't exceed safe width
+        total_width = sum(col_widths)
+        if total_width > self.safe_width:
+            # Scale down proportionally
+            scale = self.safe_width / total_width
+            col_widths = [w * scale for w in col_widths]
         
         if header_color is None:
             header_color = self.primary_color
         
-        if row_colors is None:
-            row_colors = [(255, 255, 255), (245, 245, 245)]
-        
         # Table header
-        self.set_font('DejaVu', 'B', font_size)
+        self.set_font('Arial', 'B', font_size)
         self.set_text_color(255, 255, 255)
         self.set_fill_color(*header_color)
         
         for i, header in enumerate(headers):
-            self.cell(col_widths[i], 7, header, 1, 0, align, 1)
+            self.cell(col_widths[i], 6, str(header), 1, 0, 'C', 1)
         self.ln()
         
         # Table data
-        self.set_font('DejaVu', '', font_size)
+        self.set_font('Arial', '', font_size)
         self.set_text_color(0, 0, 0)
         
         for row_idx, row in enumerate(data):
-            fill_color = row_colors[row_idx % len(row_colors)]
-            self.set_fill_color(*fill_color)
+            # Alternate row colors
+            if row_idx % 2 == 0:
+                self.set_fill_color(255, 255, 255)
+            else:
+                self.set_fill_color(250, 250, 250)
             
             for i, item in enumerate(row):
-                self.cell(col_widths[i], 6, str(item), 1, 0, align, 1)
+                # Truncate long text to fit in cell
+                cell_text = str(item)
+                max_chars = int(col_widths[i] / (font_size * 0.35))  # Rough character estimate
+                if len(cell_text) > max_chars:
+                    cell_text = cell_text[:max_chars-3] + "..."
+                
+                self.cell(col_widths[i], 5, cell_text, 1, 0, 'C', 1)
             self.ln()
-    
-    def add_key_value_table(self, data, col_widths=[70, 130], font_size=10, 
-                           key_color=None, value_color=None):
-        if key_color is None:
-            key_color = self.primary_color
-        if value_color is None:
-            value_color = (0, 0, 0)
         
-        self.set_font('DejaVu', 'B', font_size)
-        self.set_text_color(*key_color)
+        self.ln(2)
+    
+    def add_key_value_table(self, data, col_widths=None, font_size=9):
+        if col_widths is None:
+            col_widths = [60, 120]  # Total 180mm
+        
+        # Ensure total width doesn't exceed safe width
+        if sum(col_widths) > self.safe_width:
+            col_widths = [self.safe_width * 0.33, self.safe_width * 0.67]
+        
+        self.set_font('Arial', 'B', font_size)
+        self.set_text_color(*self.primary_color)
         self.set_fill_color(240, 248, 255)
         
         for key, value in data:
-            self.cell(col_widths[0], 7, key, 1, 0, 'L', 1)
-            self.set_font('DejaVu', '', font_size)
-            self.set_text_color(*value_color)
-            self.set_fill_color(255, 255, 255)
-            # Handle multi-line values
-            if isinstance(value, str) and len(value) > 50:
-                self.multi_cell(col_widths[1], 7, str(value), 1, 'L', 1)
+            # Key cell
+            self.cell(col_widths[0], 6, str(key), 1, 0, 'L', 1)
+            
+            # Value cell - handle long values safely
+            value_str = str(value)
+            if len(value_str) > 80:  # Very long values
+                # Save position
+                x = self.get_x()
+                y = self.get_y()
+                
+                # Print truncated value in cell
+                self.cell(col_widths[1], 6, value_str[:80] + "...", 1, 1, 'L', 1)
+                
+                # Continue on next line if needed
+                remaining_text = value_str[80:]
+                if remaining_text:
+                    self.set_x(x + col_widths[0])
+                    self.multi_cell(col_widths[1], 6, remaining_text, 1, 'L', 1)
             else:
-                self.cell(col_widths[1], 7, str(value), 1, 1, 'L', 1)
-            self.set_font('DejaVu', 'B', font_size)
-            self.set_text_color(*key_color)
-            self.set_fill_color(240, 248, 255)
+                self.cell(col_widths[1], 6, value_str, 1, 1, 'L', 1)
+        
+        self.ln(2)
     
-    def add_image(self, image_bytes, width=180, caption=None, align='C'):
+    def add_image(self, image_bytes, width=None, caption=None):
+        if width is None:
+            width = min(self.safe_width, 150)  # Default safe width
+        
         try:
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_plot:
                 tmp_plot.write(image_bytes)
                 tmp_plot_path = tmp_plot.name
             
-            # Calculate x position for alignment
-            if align == 'C':
-                x = (self.w - width) / 2
-            elif align == 'L':
-                x = self.l_margin
-            else:  # 'R'
-                x = self.w - width - self.r_margin
-                
+            # Center the image
+            x = (self.w - width) / 2
             self.image(tmp_plot_path, x=x, w=width)
             os.unlink(tmp_plot_path)
             
             if caption:
-                self.set_font('DejaVu', 'I', 8)
+                self.set_font('Arial', 'I', 7)
                 self.set_text_color(*self.dark_gray)
-                self.cell(0, 5, caption, 0, 1, align)
-                self.ln(3)
+                self.cell(0, 4, caption, 0, 1, 'C')
+                self.ln(2)
         except Exception as e:
-            self.set_font('DejaVu', 'I', 8)
-            self.set_text_color(*self.accent_color)
-            self.cell(0, 5, f"Image not available: {str(e)}", 0, 1)
-    
-    def add_status_indicator(self, status, text, size=5):
-        """Add colored status indicator"""
-        colors = {
-            'optimal': (40, 167, 69),
-            'warning': (255, 193, 7),
-            'critical': (220, 53, 69),
-            'severe': (108, 117, 125)
-        }
-        
-        color = colors.get(status.lower(), (108, 117, 125))
-        self.set_fill_color(*color)
-        self.cell(size, size, '', 0, 0, 'L', 1)
-        self.cell(3, size, '', 0, 0)  # Spacing
-        self.set_font('DejaVu', '', 9)
-        self.set_text_color(0, 0, 0)
-        self.cell(0, size, text, 0, 1)
-        self.ln(1)
+            # Silent fail for images
+            pass
 
 def generate_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitation_info, 
                         plot_bytes=None, flow_dp_plot_bytes=None, logo_bytes=None, 
                         logo_type=None, client_info=None, project_notes=None):
     """
-    Enhanced PDF report generation with comprehensive valve sizing analysis
-    
-    Args:
-        scenarios: List of scenario dictionaries
-        valve: Selected valve object
-        op_points: List of operating points for each scenario
-        req_cvs: List of required Cv values
-        warnings: List of warning messages
-        cavitation_info: List of cavitation information
-        plot_bytes: Bytes for Cv characteristic plot
-        flow_dp_plot_bytes: Bytes for flow vs pressure drop plot
-        logo_bytes: Company logo bytes
-        logo_type: Logo file type
-        client_info: Client information string
-        project_notes: Additional project notes
+    Robust PDF report generation with error handling
     """
     try:
-        # Create PDF with enhanced features
+        # Create PDF with safe margins
         pdf = EnhancedPDFReport(logo_bytes=logo_bytes, logo_type=logo_type)
         
-        # Cover page
+        # Use built-in fonts to avoid Unicode issues
+        # pdf._safe_add_fonts() - We'll use Arial directly
+        
+        # Cover page (simplified)
         project_name = "Valve Sizing Project"
         if scenarios and scenarios[0].get("name"):
-            project_name = scenarios[0]["name"]
+            project_name = scenarios[0]["name"][:50]  # Limit length
         
         pdf.cover_page(
-            title="CONTROL VALVE SIZING REPORT",
+            title="VALVE SIZING REPORT",
             subtitle=project_name,
-            project_info=f"Prepared by VASTAŞ Engineering Department",
-            client_info=client_info
+            project_info="VASTAŞ Engineering Department",
+            client_info=client_info[:200] if client_info else None  # Limit length
         )
         
-        # Executive Summary
+        # Table of Contents (simplified)
         pdf.add_page()
-        pdf.chapter_title('Executive Summary', level=1)
-        
-        # Calculate overall project status
-        status_counts = {'optimal': 0, 'warning': 0, 'critical': 0}
-        for i, scenario in enumerate(scenarios):
-            result_status = "optimal"
-            if "Severe" in cavitation_info[i] or "Choked" in cavitation_info[i]:
-                result_status = "critical"
-            elif "High opening" in warnings[i] or "Low opening" in warnings[i] or "Moderate" in cavitation_info[i]:
-                result_status = "warning"
-            status_counts[result_status] += 1
-        
-        overall_status = "optimal"
-        if status_counts['critical'] > 0:
-            overall_status = "critical"
-        elif status_counts['warning'] > 0:
-            overall_status = "warning"
-        
-        # Status summary
-        pdf.chapter_title('Project Status', level=2)
-        status_summary = [
-            f"Total Scenarios: {len(scenarios)}",
-            f"Optimal: {status_counts['optimal']}",
-            f"Warnings: {status_counts['warning']}",
-            f"Critical Issues: {status_counts['critical']}",
-            f"Overall Status: {overall_status.upper()}"
-        ]
-        pdf.add_bullet_list(status_summary)
-        
-        # Key findings
-        pdf.chapter_title('Key Findings', level=2)
-        key_findings = []
-        
-        # Valve information
-        actual_cvs = [valve.get_cv_at_opening(op) for op in op_points]
-        margins = [(actual_cvs[i] / req_cvs[i] - 1) * 100 if req_cvs[i] > 0 else 0 
-                  for i in range(len(scenarios))]
-        
-        avg_margin = sum(margins) / len(margins) if margins else 0
-        min_margin = min(margins) if margins else 0
-        max_margin = max(margins) if margins else 0
-        
-        key_findings.extend([
-            f"Selected Valve: {get_valve_display_name(valve)}",
-            f"Average Capacity Margin: {avg_margin:.1f}%",
-            f"Minimum Margin: {min_margin:.1f}%",
-            f"Maximum Margin: {max_margin:.1f}%",
-            f"Operating Range: {min(op_points):.1f}% to {max(op_points):.1f}%"
-        ])
-        
-        # Add cavitation summary
-        cavitation_scenarios = [i for i, info in enumerate(cavitation_info) 
-                              if "Severe" in info or "Choked" in info]
-        if cavitation_scenarios:
-            key_findings.append(f"Cavitation Issues: {len(cavitation_scenarios)} scenario(s)")
-        
-        pdf.add_bullet_list(key_findings)
-        
-        # Recommendations
-        if overall_status != "optimal":
-            pdf.chapter_title('Recommendations', level=2)
-            recommendations = []
-            
-            if status_counts['critical'] > 0:
-                recommendations.append("Consider alternative valve sizes or types for scenarios with critical issues")
-            
-            if any("High opening" in warning for warning in warnings):
-                recommendations.append("Consider larger valve size for high opening scenarios")
-            
-            if any("Low opening" in warning for warning in warnings):
-                recommendations.append("Consider smaller valve size for low opening scenarios")
-            
-            if any("Severe" in info for info in cavitation_info):
-                recommendations.append("Implement cavitation protection measures for severe cavitation scenarios")
-            
-            if any("High velocity" in warning for warning in warnings):
-                recommendations.append("Review piping design for high velocity scenarios")
-            
-            pdf.add_bullet_list(recommendations)
-        
-        # Project notes
-        if project_notes:
-            pdf.chapter_title('Project Notes', level=2)
-            pdf.chapter_body(project_notes)
-        
-        # Table of Contents
-        pdf.add_page()
-        pdf.chapter_title('Table of Contents', level=1)
+        pdf.chapter_title('Table of Contents')
         
         toc_items = [
-            ("1. Project Information", 4),
-            ("2. Valve Specifications", 5),
-            ("3. Sizing Results Summary", 6),
-            ("4. Detailed Scenario Analysis", 7),
-            ("5. Valve Performance Characteristics", 11),
-            ("6. Cavitation & Flow Analysis", 13),
-            ("7. Technical Appendices", 15)
+            "1. Project Information",
+            "2. Valve Specifications", 
+            "3. Sizing Results",
+            "4. Detailed Analysis",
+            "5. Technical Data"
         ]
         
-        pdf.set_font('DejaVu', '', 11)
-        pdf.set_text_color(0, 0, 0)
-        
-        for title, page in toc_items:
-            pdf.cell(0, 8, title, 0, 0, 'L')
-            # Dot leaders
-            leader_length = 60 - len(title)
-            dots = '.' * max(leader_length, 3)
-            pdf.cell(0, 8, dots, 0, 0, 'L')
-            pdf.cell(0, 8, str(page), 0, 1, 'R')
+        pdf.add_bullet_list(toc_items)
         
         # Project Information
         pdf.add_page()
-        pdf.chapter_title('1. Project Information', level=1)
+        pdf.chapter_title('1. Project Information')
         
         project_info = [
-            ("Project Name:", project_name),
-            ("Report Date:", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-            ("Prepared By:", "VASTAŞ Valve Sizing Software v2.0"),
-            ("Valve Model:", get_valve_display_name(valve)),
-            ("Number of Scenarios:", str(len(scenarios))),
-            ("Analysis Standards:", "ISA-75.01.01 / IEC 60534-2-1"),
-            ("Fluid Properties:", "CoolProp & Standard References")
+            ("Project:", project_name),
+            ("Date:", datetime.now().strftime("%Y-%m-%d")),
+            ("Valve:", get_valve_display_name(valve)),
+            ("Scenarios:", str(len(scenarios))),
         ]
-        
-        if client_info:
-            project_info.insert(2, ("Client:", client_info))
         
         pdf.add_key_value_table(project_info)
         
-        # Scenario Overview
-        pdf.chapter_title('Scenario Overview', level=2)
-        scenario_overview_data = [['Scenario', 'Fluid Type', 'Flow Rate', 'P1 (bar)', 'P2 (bar)', 'Temp (°C)']]
-        
-        for scenario in scenarios:
-            flow_unit = "m³/h" if scenario['fluid_type'] == 'liquid' else 'kg/h' if scenario['fluid_type'] == 'steam' else 'std m³/h'
-            scenario_overview_data.append([
-                scenario['name'],
-                scenario['fluid_type'].title(),
-                f"{scenario['flow']:.1f} {flow_unit}",
-                f"{scenario['p1']:.2f}",
-                f"{scenario['p2']:.2f}",
-                f"{scenario['temp']:.1f}"
-            ])
-        
-        pdf.add_table(
-            scenario_overview_data[0],
-            scenario_overview_data[1:],
-            col_widths=[30, 25, 30, 20, 20, 25]
-        )
-        
-        # Valve Specifications (existing content continues...)
+        # Valve Specifications
         pdf.add_page()
-        pdf.chapter_title('2. Valve Specifications', level=1)
+        pdf.chapter_title('2. Valve Specifications')
         
-        # Basic valve specs
         valve_specs = [
-            ("Valve Size:", f"{valve.size}\""),
+            ("Size:", f"{valve.size}\""),
             ("Type:", "Globe" if valve.valve_type == 3 else "Axial"),
-            ("Rating Class:", str(valve.rating_class)),
-            ("Fl (Liquid Recovery):", f"{valve.get_fl_at_opening(100):.3f}"),
-            ("Xt (Pressure Drop Ratio):", f"{valve.get_xt_at_opening(100):.3f}"),
-            ("Fd (Valve Style Modifier):", f"{valve.fd:.2f}"),
-            ("Internal Diameter:", f"{valve.diameter:.2f} in"),
-            ("Connection Type:", "Flanged (Standard)"),
-            ("Manufacturer:", "VASTAŞ Valves")
+            ("Class:", str(valve.rating_class)),
+            ("Fl:", f"{valve.get_fl_at_opening(100):.3f}"),
+            ("Xt:", f"{valve.get_xt_at_opening(100):.3f}"),
+            ("Fd:", f"{valve.fd:.2f}"),
         ]
+        
         pdf.add_key_value_table(valve_specs)
         
-        # Valve characteristics tables
-        col_width = 60
-        pdf.chapter_title('Valve Cv Characteristics', level=2)
-        cv_table_data = []
-        for open_percent, cv in valve.cv_table.items():
-            cv_table_data.append([f"{open_percent}%", f"{cv:.1f}"])
-        pdf.add_table(['Opening %', 'Cv Value'], cv_table_data, col_widths=[col_width, col_width])
-        
-        pdf.chapter_title('Valve Fl Characteristics', level=2)
-        fl_table_data = []
-        for open_percent, fl in valve.fl_table.items():
-            fl_table_data.append([f"{open_percent}%", f"{fl:.3f}"])
-        pdf.add_table(['Opening %', 'Fl Value'], fl_table_data, col_widths=[col_width, col_width])
-        
-        pdf.chapter_title('Valve Xt Characteristics', level=2)
-        xt_table_data = []
-        for open_percent, xt in valve.xt_table.items():
-            xt_table_data.append([f"{open_percent}%", f"{xt:.3f}"])
-        pdf.add_table(['Opening %', 'Xt Value'], xt_table_data, col_widths=[col_width, col_width])
-        
-        # Sizing Results Summary
+        # Sizing Results
         pdf.add_page()
-        pdf.chapter_title('3. Sizing Results Summary', level=1)
+        pdf.chapter_title('3. Sizing Results')
         
+        # Simple results table
+        headers = ['Scenario', 'Req Cv', 'Opening%', 'Actual Cv', 'Margin%', 'Status']
         results_data = []
+        
         for i, scenario in enumerate(scenarios):
             actual_cv = valve.get_cv_at_opening(op_points[i])
             margin = (actual_cv / req_cvs[i] - 1) * 100 if req_cvs[i] > 0 else 0
             
-            # Enhanced status with icons and colors
-            status = "✅ Optimal"
-            status_class = "optimal"
-            if "Severe" in cavitation_info[i]:
-                status = "⚠️ Severe Cavitation"
-                status_class = "critical"
-            elif "Choked" in cavitation_info[i]:
-                status = "❌ Choked Flow"
-                status_class = "critical"
-            elif "High opening" in warnings[i]:
-                status = "⚠️ High Opening"
-                status_class = "warning"
-            elif "Low opening" in warnings[i]:
-                status = "⚠️ Low Opening"
-                status_class = "warning"
+            # Simplified status
+            status = "OK"
+            if "Severe" in cavitation_info[i] or "Choked" in cavitation_info[i]:
+                status = "CRITICAL"
+            elif "High opening" in warnings[i] or "Low opening" in warnings[i]:
+                status = "WARNING"
             elif "Insufficient" in warnings[i]:
-                status = "❌ Insufficient Capacity"
-                status_class = "critical"
-            elif "High velocity" in warnings[i]:
-                status = "⚠️ High Velocity"
-                status_class = "warning"
+                status = "UNDERSIZED"
             
             results_data.append([
-                scenario["name"],
+                scenario["name"][:15],  # Limit length
                 f"{req_cvs[i]:.1f}",
-                f"{valve.size}\"",
                 f"{op_points[i]:.1f}%",
                 f"{actual_cv:.1f}",
                 f"{margin:.1f}%",
                 status
             ])
         
-        pdf.add_table(
-            ['Scenario', 'Req Cv', 'Valve Size', 'Opening %', 'Actual Cv', 'Margin %', 'Status'],
-            results_data,
-            col_widths=[25, 20, 20, 20, 20, 20, 45]
-        )
+        pdf.add_table(headers, results_data, col_widths=[30, 25, 25, 25, 25, 40])
         
-        # Performance metrics
-        pdf.chapter_title('Performance Metrics', level=2)
-        metrics_data = [
-            ("Average Operating Point:", f"{sum(op_points)/len(op_points):.1f}%"),
-            ("Operating Range:", f"{min(op_points):.1f}% - {max(op_points):.1f}%"),
-            ("Average Capacity Margin:", f"{sum(margins)/len(margins):.1f}%"),
-            ("Minimum Margin:", f"{min(margins):.1f}%"),
-            ("Valve Utilization:", f"{(sum(req_cvs)/valve.get_cv_at_opening(100)/len(req_cvs))*100:.1f}%")
-        ]
-        pdf.add_key_value_table(metrics_data)
+        # Add Cv curve plot if available
+        if plot_bytes:
+            pdf.add_page()
+            pdf.chapter_title('Valve Cv Characteristic')
+            pdf.add_image(plot_bytes, width=150, caption="Cv vs Opening Percentage")
         
-        # Continue with detailed scenario analysis...
-        # [Rest of the existing detailed analysis content goes here]
+        # Add flow vs pressure drop plot if available
+        if flow_dp_plot_bytes and scenarios:
+            pdf.add_page()
+            pdf.chapter_title('Flow vs Pressure Drop')
+            pdf.add_image(flow_dp_plot_bytes, width=150, 
+                         caption=f"Scenario: {scenarios[0]['name']}")
         
-        # Enhanced appendices
+        # Technical Data
         pdf.add_page()
-        pdf.chapter_title('7. Technical Appendices', level=1)
+        pdf.chapter_title('5. Technical Data')
         
-        pdf.chapter_title('Calculation Methodology', level=2)
-        pdf.chapter_body("""
-This valve sizing analysis is performed in accordance with ISA-75.01.01 (IEC 60534-2-1) standards. 
-The calculations incorporate:
-
-• Liquid Flow: Accounts for pressure recovery (Fl), vapor pressure (FF), and viscosity effects (Fr)
-• Gas Flow: Considers compressibility (Z), specific heat ratio (k), and expansion factor (Y)
-• Steam Flow: Uses density-based calculations with appropriate expansion factors
-• Reynolds Number: Calculated for viscosity correction in laminar/turbulent transition regions
-• Piping Geometry: Includes reducer/expander effects through Fp, FLP, and XTP factors
-""")
-        
-        # Quality assurance section
-        pdf.chapter_title('Quality Assurance', level=2)
-        qa_items = [
-            "All calculations verified against ISA/IEC standards",
-            "Fluid properties validated using CoolProp database",
-            "Cross-checked with manufacturer's performance data",
-            "Results reviewed by senior engineering team",
-            "Document version controlled and archived"
+        tech_info = [
+            ("Standards:", "ISA-75.01.01 / IEC 60534-2-1"),
+            ("Software:", "VASTAŞ Valve Sizing v2.0"),
+            ("Generated:", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         ]
-        pdf.add_bullet_list(qa_items)
         
-        # Revision history
-        pdf.chapter_title('Revision History', level=2)
-        revision_data = [
-            ['Version', 'Date', 'Changes', 'Author'],
-            ['1.0', datetime.now().strftime('%Y-%m-%d'), 'Initial release', 'VASTAŞ Software']
-        ]
-        pdf.add_table(revision_data[0], revision_data[1:], col_widths=[20, 30, 80, 40])
+        pdf.add_key_value_table(tech_info)
         
-        # Generate PDF in memory
+        # Project notes if provided
+        if project_notes:
+            pdf.chapter_title('Project Notes')
+            # Truncate very long notes
+            safe_notes = project_notes[:500] + "..." if len(project_notes) > 500 else project_notes
+            pdf.chapter_body(safe_notes)
+        
+        # Generate PDF
         pdf_bytes_io = BytesIO()
         pdf.output(pdf_bytes_io)
         pdf_bytes_io.seek(0)
         return pdf_bytes_io
         
     except Exception as e:
-        # Enhanced error handling
+        # Ultra-simple error PDF
         error_bytes_io = BytesIO()
+        
+        # Create minimal PDF without fancy features
         error_pdf = FPDF()
         error_pdf.add_page()
-        error_pdf.set_font('Arial', 'B', 16)
-        error_pdf.cell(0, 10, 'PDF Generation Error', 0, 1)
-        error_pdf.set_font('Arial', '', 12)
-        error_pdf.multi_cell(0, 10, 
-            f"An error occurred while generating the PDF report:\n\n"
-            f"Error: {str(e)}\n\n"
-            f"Please contact technical support with the error details above."
+        error_pdf.set_font('Arial', 'B', 14)
+        error_pdf.cell(0, 10, 'Valve Sizing Report - Error', 0, 1)
+        error_pdf.set_font('Arial', '', 10)
+        error_pdf.multi_cell(0, 8, 
+            f"An error occurred while generating the full PDF report.\n\n"
+            f"Basic information:\n"
+            f"Valve: {get_valve_display_name(valve)}\n"
+            f"Scenarios: {len(scenarios)}\n"
+            f"Error: {str(e)[:200]}\n\n"
+            f"Please try again or contact support."
         )
+        
+        # Add basic table as fallback
+        if scenarios and valve:
+            error_pdf.ln(5)
+            error_pdf.set_font('Arial', 'B', 10)
+            error_pdf.cell(0, 8, 'Basic Results:', 0, 1)
+            
+            for i, scenario in enumerate(scenarios[:3]):  # Limit to first 3 scenarios
+                if i < len(op_points) and i < len(req_cvs):
+                    actual_cv = valve.get_cv_at_opening(op_points[i])
+                    margin = (actual_cv / req_cvs[i] - 1) * 100 if req_cvs[i] > 0 else 0
+                    
+                    error_pdf.set_font('Arial', '', 9)
+                    error_pdf.cell(0, 6, 
+                        f"{scenario['name'][:20]}: Cv_req={req_cvs[i]:.1f}, "
+                        f"Open={op_points[i]:.1f}%, Margin={margin:.1f}%", 
+                        0, 1
+                    )
+        
         error_pdf.output(error_bytes_io)
         error_bytes_io.seek(0)
         return error_bytes_io
 
-# Update the export button section to include new parameters
+# Update the export section in main() function
 def update_export_section():
     """
-    Example of how to update the export button section to use enhanced PDF features
+    Updated export section with simplified inputs
     """
-    # In your export button click handler, add:
-    client_info = st.text_area("Client Information", 
-                              value="ABC Manufacturing Company\n123 Industrial Park\nAnytown, USA",
-                              key="client_info")
+    # Add client info and notes with length limits
+    with st.expander("Report Options"):
+        client_info = st.text_area(
+            "Client Information (optional)", 
+            max_chars=200,
+            placeholder="Client name and contact information...",
+            key="client_info"
+        )
+        
+        project_notes = st.text_area(
+            "Project Notes (optional)",
+            max_chars=500, 
+            placeholder="Special considerations or notes...",
+            key="project_notes"
+        )
     
-    project_notes = st.text_area("Project Notes", 
-                                value="Special considerations: \n- High cycle operation expected\n- Corrosive environment\n- Maintenance access limited",
-                                key="project_notes")
-    
-    # Then pass these to generate_pdf_report:
-    pdf_bytes_io = generate_pdf_report(
-        scenarios, valve, op_points, req_cvs, warnings, cavitation_info,
-        plot_bytes, flow_dp_plot_bytes, logo_bytes, logo_type,
-        client_info, project_notes
-    )
+    # Then in the export button click handler:
+    if st.button("Generate Enhanced PDF Report"):
+        with st.spinner("Creating PDF report..."):
+            try:
+                pdf_bytes_io = generate_pdf_report(
+                    scenarios, valve, op_points, req_cvs, warnings, cavitation_info,
+                    plot_bytes, flow_dp_plot_bytes, logo_bytes, logo_type,
+                    client_info, project_notes
+                )
+                
+                st.success("PDF report generated successfully!")
+                st.download_button(
+                    label="📥 Download PDF Report",
+                    data=pdf_bytes_io,
+                    file_name=f"Valve_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                    mime="application/pdf",
+                    type="primary"
+                )
+                
+            except Exception as e:
+                st.error(f"PDF generation failed: {str(e)}")
+                st.info("Try generating a simpler report or check the input data.")
+
 
 # ========================
 # SIMULATION RESULTS
