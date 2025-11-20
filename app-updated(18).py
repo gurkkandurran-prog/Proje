@@ -20,6 +20,8 @@ from PIL import Image
 import traceback
 import kaleido
 import CoolProp.CoolProp as CP
+import svgwrite
+from svgwrite import cm, mm
 
 # ========================
 # CONSTANTS & UNIT CONVERSION
@@ -780,6 +782,266 @@ def check_cavitation(p1: float, p2: float, pv: float, fl_at_op: float, pc: float
     return False, sigma, km, "Minimal cavitation risk"
 
 # ========================
+# VALVE DRAWING GENERATION
+# ========================
+class ValveDrawingGenerator:
+    def __init__(self):
+        self.components = {
+            "valve_body": {
+                "width": 100,
+                "height": 60,
+                "color": "#4A90E2"
+            },
+            "flange": {
+                "width": 20,
+                "height": 80,
+                "color": "#7ED321"
+            },
+            "actuator": {
+                "width": 80,
+                "height": 40,
+                "color": "#BD10E0"
+            },
+            "stem": {
+                "width": 10,
+                "height": 50,
+                "color": "#333333"
+            }
+        }
+    
+    def create_valve_svg(self, valve, scenario, op_point, details, width=400, height=300):
+        """Create SVG drawing of the valve assembly"""
+        dwg = svgwrite.Drawing(size=(f"{width}px", f"{height}px"))
+        
+        # Background
+        dwg.add(dwg.rect(insert=(0, 0), size=(f"{width}px", f"{height}px"), fill="#f8f9fa"))
+        
+        # Title
+        title = f"{valve.size}\" { 'Globe' if valve.valve_type == 3 else 'Axial'} Valve - {scenario['name']}"
+        dwg.add(dwg.text(title, insert=(width//2, 20), text_anchor="middle", 
+                        font_size="14px", font_weight="bold", fill="#333"))
+        
+        # Main assembly group
+        assembly = dwg.g(transform=f"translate({width//2 - 50}, {height//2 - 40})")
+        
+        # Draw components based on valve type
+        if valve.valve_type == 3:  # Globe valve
+            self._draw_globe_valve(assembly, valve, scenario, op_point, details)
+        else:  # Axial valve
+            self._draw_axial_valve(assembly, valve, scenario, op_point, details)
+        
+        dwg.add(assembly)
+        
+        # Add operating parameters
+        self._add_parameters_table(dwg, valve, scenario, op_point, details, width, height)
+        
+        return dwg
+    
+    def _draw_globe_valve(self, group, valve, scenario, op_point, details):
+        """Draw globe valve components"""
+        # Valve body (main chamber)
+        body = group.rect(insert=(20, 30), size=(60, 40), 
+                         fill=self.components["valve_body"]["color"],
+                         stroke="#333", stroke_width=2)
+        group.add(body)
+        
+        # Inlet and outlet
+        group.add(group.rect(insert=(0, 40), size=(20, 20), 
+                           fill=self.components["flange"]["color"],
+                           stroke="#333", stroke_width=1))
+        group.add(group.rect(insert=(80, 40), size=(20, 20), 
+                           fill=self.components["flange"]["color"],
+                           stroke="#333", stroke_width=1))
+        
+        # Stem
+        stem_height = 30 + (op_point / 100) * 20  # Stem position based on opening
+        group.add(group.rect(insert=(45, 10), size=(10, stem_height), 
+                           fill=self.components["stem"]["color"]))
+        
+        # Actuator
+        group.add(group.rect(insert=(30, 5), size=(40, 20), 
+                           fill=self.components["actuator"]["color"],
+                           stroke="#333", stroke_width=1))
+        
+        # Flow arrows
+        group.add(self._create_arrow(10, 50, 20, 50, "#FF6B6B"))  # Inlet arrow
+        group.add(self._create_arrow(80, 50, 90, 50, "#4ECDC4"))  # Outlet arrow
+        
+        # Opening indicator
+        opening_text = f"Opening: {op_point:.1f}%"
+        group.add(group.text(opening_text, insert=(50, 95), 
+                           text_anchor="middle", font_size="10px", fill="#333"))
+    
+    def _draw_axial_valve(self, group, valve, scenario, op_point, details):
+        """Draw axial valve components"""
+        # Valve body (cylindrical)
+        group.add(group.rect(insert=(20, 35), size=(60, 30), 
+                           fill=self.components["valve_body"]["color"],
+                           stroke="#333", stroke_width=2,
+                           rx=15))  # Rounded corners
+        
+        # Flanges
+        group.add(group.rect(insert=(0, 40), size=(20, 20), 
+                           fill=self.components["flange"]["color"],
+                           stroke="#333", stroke_width=1))
+        group.add(group.rect(insert=(80, 40), size=(20, 20), 
+                           fill=self.components["flange"]["color"],
+                           stroke="#333", stroke_width=1))
+        
+        # Vane/disk position based on opening
+        vane_angle = 90 - (op_point / 100) * 90  # 0° (closed) to 90° (open)
+        vane_group = group.g(transform=f"translate(50, 50) rotate({vane_angle})")
+        vane_group.add(group.rect(insert=(-5, -25), size=(10, 50), 
+                                fill="#FFD93D", stroke="#333", stroke_width=1))
+        group.add(vane_group)
+        
+        # Actuator
+        group.add(group.circle(center=(50, 15), r=15, 
+                             fill=self.components["actuator"]["color"],
+                             stroke="#333", stroke_width=1))
+        
+        # Flow arrows
+        group.add(self._create_arrow(10, 50, 20, 50, "#FF6B6B"))
+        group.add(self._create_arrow(80, 50, 90, 50, "#4ECDC4"))
+        
+        # Opening indicator
+        opening_text = f"Opening: {op_point:.1f}%"
+        group.add(group.text(opening_text, insert=(50, 95), 
+                           text_anchor="middle", font_size="10px", fill="#333"))
+    
+    def _create_arrow(self, x1, y1, x2, y2, color):
+        """Create an arrow for flow direction"""
+        arrow = svgwrite.container.Marker(insert=(1, 1), size=(4, 4), orient="auto")
+        arrow.add(svgwrite.shapes.Polyline([(0, 0), (4, 2), (0, 4)], fill=color))
+        
+        line = svgwrite.shapes.Line(start=(x1, y1), end=(x2, y2), 
+                                  stroke=color, stroke_width=2,
+                                  marker_end=arrow)
+        return line
+    
+    def _add_parameters_table(self, dwg, valve, scenario, op_point, details, width, height):
+        """Add parameter table to the drawing"""
+        y_start = height - 120
+        
+        # Table background
+        dwg.add(dwg.rect(insert=(10, y_start), size=(width-20, 110), 
+                        fill="white", stroke="#ddd", stroke_width=1,
+                        rx=5))
+        
+        # Table title
+        dwg.add(dwg.text("Operating Parameters", insert=(width//2, y_start + 20), 
+                        text_anchor="middle", font_size="12px", font_weight="bold", fill="#333"))
+        
+        # Parameters
+        params = [
+            ("Valve Size", f"{valve.size}\""),
+            ("Fluid", scenario.get('fluid_library', 'Custom')),
+            ("Flow Rate", f"{scenario['flow_display']:.1f} {scenario['flow_unit']}"),
+            ("Pressure Drop", f"{scenario['p1'] - scenario['p2']:.2f} bar"),
+            ("Required Cv", f"{details.get('req_cv', 0):.1f}"),
+            ("Actual Cv", f"{valve.get_cv_at_opening(op_point):.1f}")
+        ]
+        
+        for i, (param, value) in enumerate(params):
+            y_pos = y_start + 40 + (i * 15)
+            dwg.add(dwg.text(param, insert=(30, y_pos), 
+                           font_size="10px", fill="#666"))
+            dwg.add(dwg.text(value, insert=(width-30, y_pos), 
+                           font_size="10px", fill="#333", text_anchor="end"))
+
+def generate_valve_drawing_bytes(valve, scenario, op_point, details):
+    """Generate valve drawing and return as bytes"""
+    try:
+        generator = ValveDrawingGenerator()
+        drawing = generator.create_valve_svg(valve, scenario, op_point, details)
+        
+        # Convert SVG to bytes
+        svg_bytes = drawing.tostring().encode('utf-8')
+        return svg_bytes
+    except Exception as e:
+        st.error(f"Error generating drawing: {str(e)}")
+        return None
+
+def display_valve_drawing(valve, scenario, op_point, details):
+    """Display valve drawing in Streamlit"""
+    svg_bytes = generate_valve_drawing_bytes(valve, scenario, op_point, details)
+    
+    if svg_bytes:
+        # Convert SVG to base64 for display
+        svg_b64 = base64.b64encode(svg_bytes).decode()
+        
+        # Display SVG
+        st.markdown(f"""
+        <div style="border: 1px solid #ddd; border-radius: 10px; padding: 20px; background: white;">
+            <h3 style="text-align: center;">Valve Assembly Drawing - {scenario['name']}</h3>
+            <div style="display: flex; justify-content: center;">
+                <img src="data:image/svg+xml;base64,{svg_b64}" style="max-width: 100%; height: auto;">
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Download button
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                label="📥 Download SVG Drawing",
+                data=svg_bytes,
+                file_name=f"valve_drawing_{scenario['name']}_{datetime.now().strftime('%Y%m%d_%H%M')}.svg",
+                mime="image/svg+xml"
+            )
+        with col2:
+            # Option to convert to PNG (requires cairosvg)
+            try:
+                import cairosvg
+                png_bytes = cairosvg.svg2png(bytestring=svg_bytes)
+                st.download_button(
+                    label="📥 Download PNG Drawing",
+                    data=png_bytes,
+                    file_name=f"valve_drawing_{scenario['name']}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+                    mime="image/png"
+                )
+            except ImportError:
+                st.info("Install 'cairosvg' for PNG export: pip install cairosvg")
+    else:
+        st.error("Could not generate valve drawing")
+
+# ========================
+# BILL OF MATERIALS GENERATION
+# ========================
+def generate_bill_of_materials(valve, scenario):
+    """Generate Bill of Materials for the valve assembly"""
+    bom_items = [
+        {"part_no": f"VALVE-{valve.size}-{valve.valve_type}", "description": f"{valve.size}\" Valve Body", "qty": 1, "material": "Stainless Steel"},
+        {"part_no": f"ACT-{valve.size}", "description": "Pneumatic Actuator", "qty": 1, "material": "Aluminum"},
+        {"part_no": f"STEM-{valve.size}", "description": "Valve Stem", "qty": 1, "material": "Stainless Steel"},
+        {"part_no": f"SEAT-{valve.size}", "description": "Valve Seat", "qty": 1, "material": "Stellited"},
+        {"part_no": f"FLANGE-{valve.size}-150", "description": f"{valve.size}\" Flange 150#", "qty": 2, "material": "Carbon Steel"},
+        {"part_no": f"GASKET-{valve.size}", "description": "Flange Gasket", "qty": 2, "material": "Graphite"},
+        {"part_no": f"BOLT-{valve.size}", "description": "Flange Bolts", "qty": 8, "material": "Alloy Steel"},
+    ]
+    
+    return bom_items
+
+def display_bill_of_materials(valve, scenario):
+    """Display Bill of Materials table"""
+    bom_items = generate_bill_of_materials(valve, scenario)
+    
+    st.subheader("Bill of Materials")
+    
+    # Create DataFrame for nice display
+    bom_df = pd.DataFrame(bom_items)
+    st.dataframe(bom_df, use_container_width=True, hide_index=True)
+    
+    # Download as CSV
+    csv = bom_df.to_csv(index=False)
+    st.download_button(
+        label="📥 Download BOM as CSV",
+        data=csv,
+        file_name=f"bom_{valve.size}_{scenario['name']}.csv",
+        mime="text/csv"
+    )
+
+# ========================
 # SIMPLE & ROBUST PDF REPORT GENERATION
 # ========================
 class SimplePDFReport(FPDF):
@@ -872,7 +1134,7 @@ class SimplePDFReport(FPDF):
             pass
 
 def generate_simple_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitation_info,
-                              plot_bytes=None, flow_dp_plot_bytes=None):
+                              plot_bytes=None, flow_dp_plot_bytes=None, drawing_bytes_list=None):
     """
     Ultra-simple PDF generation that guarantees no Unicode errors
     """
@@ -900,6 +1162,14 @@ def generate_simple_pdf_report(scenarios, valve, op_points, req_cvs, warnings, c
             pdf.add_key_value(key, value)
         
         pdf.ln(5)
+        
+        # Add drawings if available
+        if drawing_bytes_list and scenarios:
+            for i, drawing_bytes in enumerate(drawing_bytes_list):
+                if i < len(scenarios):
+                    pdf.add_page()
+                    pdf.add_subtitle(f"Valve Drawing - {scenarios[i]['name']}")
+                    pdf.add_image_safe(drawing_bytes, 150, f"Valve Assembly - {scenarios[i]['name']}")
         
         # Results summary
         pdf.add_subtitle("Sizing Results Summary")
@@ -1020,95 +1290,14 @@ def create_minimal_pdf(valve, scenarios, op_points, req_cvs):
 # Replace the existing generate_pdf_report function with this simpler version
 def generate_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitation_info,
                        plot_bytes=None, flow_dp_plot_bytes=None, logo_bytes=None, 
-                       logo_type=None, client_info=None, project_notes=None):
+                       logo_type=None, client_info=None, project_notes=None, drawing_bytes_list=None):
     """
     Main PDF generation function - uses simple robust version
     """
     return generate_simple_pdf_report(
         scenarios, valve, op_points, req_cvs, warnings, cavitation_info,
-        plot_bytes, flow_dp_plot_bytes
+        plot_bytes, flow_dp_plot_bytes, drawing_bytes_list
     )
-
-# Update the export section in main() function
-def update_export_in_main():
-    """
-    Replace the export button section in main() with this
-    """
-    # In your main() function, replace the export button section with:
-    
-    if export_btn:
-        if st.session_state.results is None:
-            st.error("Please run the calculation first.")
-        else:
-            with st.spinner("Generating PDF report..."):
-                try:
-                    # Prepare data
-                    scenarios = st.session_state.scenarios
-                    results = st.session_state.results
-                    valve = results["selected_valve"]
-                    selected_valve_results = results["selected_valve_results"]
-                    
-                    op_points = [r["op_point"] for r in selected_valve_results]
-                    req_cvs = [r["req_cv"] for r in selected_valve_results]
-                    warnings = [r["warning"] for r in selected_valve_results]
-                    cavitation_info = [r["cavitation_info"] for r in selected_valve_results]
-                    
-                    # Generate plots for PDF
-                    plot_bytes = None
-                    flow_dp_plot_bytes = None
-                    
-                    try:
-                        # Generate Cv curve plot
-                        plot_bytes = plot_cv_curve_matplotlib(
-                            valve, op_points, req_cvs, 
-                            [r["theoretical_cv"] for r in selected_valve_results],
-                            [s["name"] for s in scenarios]
-                        )
-                        
-                        # Generate flow vs dp plot for first scenario
-                        if scenarios:
-                            flow_dp_plot_bytes = plot_flow_vs_dp_matplotlib(
-                                scenarios[0], valve, op_points[0],
-                                selected_valve_results[0]["details"], req_cvs[0]
-                            )
-                    except:
-                        # If plot generation fails, continue without plots
-                        pass
-                    
-                    # Generate PDF
-                    pdf_bytes_io = generate_pdf_report(
-                        scenarios, valve, op_points, req_cvs, warnings, cavitation_info,
-                        plot_bytes, flow_dp_plot_bytes
-                    )
-                    
-                    # Offer download
-                    st.success("PDF report generated successfully!")
-                    st.download_button(
-                        label="📥 Download PDF Report",
-                        data=pdf_bytes_io,
-                        file_name=f"Valve_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                        mime="application/pdf",
-                        type="primary"
-                    )
-                    
-                except Exception as e:
-                    st.error(f"PDF generation failed: {str(e)}")
-                    st.info("A minimal PDF has been generated as a fallback.")
-                    
-                    # Generate absolute minimal fallback
-                    try:
-                        fallback_pdf = create_minimal_pdf(
-                            valve, scenarios, op_points, req_cvs
-                        )
-                        st.download_button(
-                            label="📥 Download Basic PDF Report",
-                            data=fallback_pdf,
-                            file_name=f"Valve_Report_Basic_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                            mime="application/pdf"
-                        )
-                    except:
-                        st.error("Could not generate any PDF. Please check your data and try again.")
-
 
 # ========================
 # SIMULATION RESULTS
@@ -1922,13 +2111,11 @@ def scenario_input_form(scenario_num, scenario_data=None):
         )
     
     with col2:
-        # FIXED: Always determine fluid_type from fluid_library if selected
         if fluid_library != "Select Fluid Library...":
             fluid_data = FLUID_LIBRARY[fluid_library]
             fluid_type = fluid_data["type"]
             st.text_input("Fluid Type", value=fluid_type.capitalize(), disabled=True, key=f"fluid_type_text_{scenario_num}")
         else:
-            # Only allow manual selection when no fluid library is selected
             try:
                 index_val = ["Liquid", "Gas", "Steam"].index(scenario_data["fluid_type"].capitalize())
             except (ValueError, AttributeError):
@@ -2125,7 +2312,7 @@ def scenario_input_form(scenario_num, scenario_data=None):
     
     return {
         "name": scenario_name,
-        "fluid_type": fluid_type,  # FIXED: Always use the determined fluid_type
+        "fluid_type": fluid_type,
         "flow": flow_std,  # Store in standard units for calculations
         "flow_display": flow_value,  # Store original value for display
         "flow_unit": flow_unit,  # Store selected unit
@@ -2469,6 +2656,11 @@ def main():
         view_3d_btn = st.button("View 3D Model", use_container_width=True)
         show_simulation_btn = st.button("Show Simulation Results", use_container_width=True)
         
+        # NEW: Drawing Features
+        st.header("Drawing Features")
+        generate_drawing_btn = st.button("Generate Valve Drawing", use_container_width=True)
+        show_bom_btn = st.button("Show Bill of Materials", use_container_width=True)
+        
         st.header("Valve Details")
         st.markdown(f"**Size:** {selected_valve.size}\"")
         st.markdown(f"**Type:** {'Globe' if selected_valve.valve_type == 3 else 'Axial'}")
@@ -2654,6 +2846,39 @@ def main():
         except Exception as e:
             st.error(f"Calculation error: {str(e)}")
             st.error(traceback.format_exc())
+    
+    # NEW: Handle drawing generation
+    if generate_drawing_btn:
+        if st.session_state.results and st.session_state.scenarios:
+            results = st.session_state.results
+            scenarios = st.session_state.scenarios
+            
+            st.subheader("Valve Assembly Drawings")
+            
+            # Create tabs for each scenario drawing
+            drawing_tabs = st.tabs([f"Drawing - {s['name']}" for s in scenarios])
+            
+            for i, (tab, scenario) in enumerate(zip(drawing_tabs, scenarios)):
+                with tab:
+                    if i < len(results["selected_valve_results"]):
+                        result = results["selected_valve_results"][i]
+                        display_valve_drawing(
+                            results["selected_valve"],
+                            scenario,
+                            result["op_point"],
+                            result
+                        )
+        else:
+            st.error("Please run calculations first to generate drawings")
+    
+    # NEW: Handle BOM display
+    if show_bom_btn:
+        if st.session_state.results and st.session_state.scenarios:
+            results = st.session_state.results
+            scenarios = st.session_state.scenarios
+            display_bill_of_materials(results["selected_valve"], scenarios[0])
+        else:
+            st.error("Please run calculations first to generate BOM")
     
     with tab_results:
         if st.session_state.results:
@@ -3009,12 +3234,29 @@ def main():
                         req_cvs[0]
                     )
                 
+                # NEW: Generate drawings for PDF
+                drawing_bytes_list = []
+                if st.session_state.results and st.session_state.scenarios:
+                    results = st.session_state.results
+                    scenarios = st.session_state.scenarios
+                    for i, scenario in enumerate(scenarios):
+                        if i < len(results["selected_valve_results"]):
+                            result = results["selected_valve_results"][i]
+                            drawing_bytes = generate_valve_drawing_bytes(
+                                results["selected_valve"],
+                                scenario,
+                                result["op_point"],
+                                result
+                            )
+                            if drawing_bytes:
+                                drawing_bytes_list.append(drawing_bytes)
+                
                 # Generate PDF
                 logo_bytes = st.session_state.logo_bytes
                 logo_type = st.session_state.logo_type
                 pdf_bytes_io = generate_pdf_report(
                     scenarios, valve, op_points, req_cvs, warnings, cavitation_info, 
-                    plot_bytes, flow_dp_plot_bytes, logo_bytes, logo_type
+                    plot_bytes, flow_dp_plot_bytes, logo_bytes, logo_type, None, None, drawing_bytes_list
                 )
                 
                 # Offer download
