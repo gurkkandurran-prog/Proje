@@ -172,7 +172,6 @@ FLUID_LIBRARY = {
         "coolprop_name": "Water",
         "sg": None,
         "visc_func": None,
-        "k_func": lambda t, p: calculate_specific_heat_ratio("Water", t, p),
         "z_func": None,  # Steam doesn't use Z in the same way
         "pv_func": None,
         "rho_func": lambda t, p: calculate_density("Water", t, p)
