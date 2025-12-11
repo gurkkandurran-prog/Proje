@@ -167,7 +167,7 @@ FLUID_LIBRARY = {
         "pv_func": None,
         "rho_func": lambda t, p: calculate_density("Methane", t, p)
     },
-    "Steam": {
+    "steam": {
         "type": "steam",
         "coolprop_name": "Water",
         "sg": None,
