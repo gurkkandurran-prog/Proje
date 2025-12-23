@@ -4037,7 +4037,7 @@ def main():
     with col2:
         st.title("Control Valve Sizing Program")
         st.markdown("**ISA/IEC Standards Compliant Valve Sizing with Enhanced Visualization**")
-        st.markdown("*Now with comprehensive calculation records showing every step*")
+        st.markdown("*VASTAŞ R&D *")
     
     with st.sidebar:
         st.header("VASTAŞ")
