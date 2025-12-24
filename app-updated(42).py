@@ -958,28 +958,6 @@ FLUID_LIBRARY = {
         "pc_func": lambda: CP.PropsSI('Pcrit', 'Octane') / 1e5,
         "rho_func": lambda t, p: calculate_density("Octane", t, p)
     },
-    "JP8": {
-        "type": "liquid",
-        "coolprop_name": "Decane",  # Using Decane as approximation for JP8
-        "sg_default": 0.81,  # Typical specific gravity for JP8 (0.78-0.84)
-        "sg_func": lambda t, p: calculate_specific_gravity_liquid("Decane", t, p),
-        "visc_func": lambda t, p: calculate_kinematic_viscosity_jet_fuel(t, p, "Decane"),
-        "k_func": None,
-        "pv_func": lambda t, p: calculate_vapor_pressure_jet_fuel(t, p, "Decane"),
-        "pc_func": lambda: 23.0,  # Approximate critical pressure for JP8 in bar
-        "rho_func": lambda t, p: calculate_density_jet_fuel(t, p, "Decane")
-    },
-    "JET A1": {
-        "type": "liquid",
-        "coolprop_name": "Decane",  # Using Decane as approximation for Jet A1
-        "sg_default": 0.80,  # Typical specific gravity for Jet A1 (0.78-0.84)
-        "sg_func": lambda t, p: calculate_specific_gravity_liquid("Decane", t, p),
-        "visc_func": lambda t, p: calculate_kinematic_viscosity_jet_fuel(t, p, "Decane"),
-        "k_func": None,
-        "pv_func": lambda t, p: calculate_vapor_pressure_jet_fuel(t, p, "Decane"),
-        "pc_func": lambda: 22.0,  # Approximate critical pressure for Jet A1 in bar
-        "rho_func": lambda t, p: calculate_density_jet_fuel(t, p, "Decane")
-    },
     "Propane": {
         "type": "liquid",
         "coolprop_name": "Propane",
