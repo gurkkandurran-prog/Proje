@@ -89,6 +89,48 @@ def calculate_specific_gravity_liquid(fluid_name: str, temp_c: float, pressure_b
         return FLUID_LIBRARY[fluid_name]["sg_default"]
     return 1.0
 
+def calculate_specific_gravity_gas(fluid_name: str, temp_c: float, pressure_bar: float) -> float:
+    """
+    Calculate specific gravity for gases relative to air at standard conditions (15°C, 1 atm)
+    SG = ρ_fluid(T,P) / ρ_air(15°C, 1 atm)
+    OR using molecular weight ratio for ideal gases
+    """
+    try:
+        if fluid_name in FLUID_LIBRARY and FLUID_LIBRARY[fluid_name].get("coolprop_name"):
+            # Calculate using molecular weight ratio (more accurate for gases)
+            fluid_name_cp = FLUID_LIBRARY[fluid_name]["coolprop_name"]
+            
+            # Get molecular weights
+            M_fluid = CP.PropsSI('M', fluid_name_cp)  # kg/kmol
+            M_air = CP.PropsSI('M', 'air')  # kg/kmol
+            
+            # For ideal gases, SG = M_fluid / M_air
+            return M_fluid / M_air
+    except:
+        pass
+    
+    # Fallback to density-based calculation
+    try:
+        if fluid_name in FLUID_LIBRARY and FLUID_LIBRARY[fluid_name].get("coolprop_name"):
+            # Calculate density at standard conditions
+            T_std = STANDARD_TEMPERATURE  # 15°C in K
+            P_std = STANDARD_PRESSURE  # 1.01325 bar
+            
+            # Get fluid density at standard conditions
+            fluid_density_std = calculate_density(fluid_name, 15, 1.01325)
+            
+            # Get air density at standard conditions
+            air_density_std = calculate_density("air", 15, 1.01325)
+            
+            if air_density_std > 0:
+                return fluid_density_std / air_density_std
+    except:
+        pass
+    
+    # Final fallback to default value
+    if fluid_name in FLUID_LIBRARY and "sg_default" in FLUID_LIBRARY[fluid_name]:
+        return FLUID_LIBRARY[fluid_name]["sg_default"]
+    return 1.0
 
 # ========================
 # COMPREHENSIVE UNIT CONVERSION FUNCTIONS
@@ -820,6 +862,7 @@ FLUID_LIBRARY = {
         "type": "gas",
         "coolprop_name": "air",
         "sg_default": 1.0,
+        "sg_func": lambda t, p: calculate_specific_gravity_gas("air", t, p),
         "visc_func": None,
         "k_func": lambda t, p: calculate_specific_heat_ratio("air", t, p),
         "z_func": lambda t, p: calculate_compressibility_factor("air", t, p),
@@ -830,6 +873,7 @@ FLUID_LIBRARY = {
         "type": "gas",
         "coolprop_name": "Methane",
         "sg_default": 0.554,
+        "sg_func": lambda t, p: calculate_specific_gravity_gas("Methane", t, p),
         "visc_func": None,
         "k_func": lambda t, p: calculate_specific_heat_ratio("Methane", t, p),
         "z_func": lambda t, p: calculate_compressibility_factor("Methane", t, p),
@@ -851,6 +895,7 @@ FLUID_LIBRARY = {
         "type": "gas",
         "coolprop_name": "CarbonDioxide",
         "sg_default": 1.52,
+        "sg_func": lambda t, p: calculate_specific_gravity_gas("CarbonDioxide", t, p),
         "visc_func": None,
         "k_func": lambda t, p: calculate_specific_heat_ratio("CarbonDioxide", t, p),
         "z_func": lambda t, p: calculate_compressibility_factor("CarbonDioxide", t, p),
@@ -861,6 +906,7 @@ FLUID_LIBRARY = {
         "type": "gas",
         "coolprop_name": "Ammonia",
         "sg_default": 0.59,
+        "sg_func": lambda t, p: calculate_specific_gravity_gas("Ammonia", t, p),
         "visc_func": None,
         "k_func": lambda t, p: calculate_specific_heat_ratio("Ammonia", t, p),
         "z_func": lambda t, p: calculate_compressibility_factor("Ammonia", t, p),
@@ -871,6 +917,7 @@ FLUID_LIBRARY = {
         "type": "gas",
         "coolprop_name": "Hydrogen",
         "sg_default": 0.0696,
+        "sg_func": lambda t, p: calculate_specific_gravity_gas("Hydrogen", t, p),
         "visc_func": None,
         "k_func": lambda t, p: calculate_specific_heat_ratio("Hydrogen", t, p),
         "z_func": lambda t, p: calculate_compressibility_factor("Hydrogen", t, p),
@@ -881,6 +928,8 @@ FLUID_LIBRARY = {
         "type": "gas",
         "coolprop_name": None,
         "sg_default": 0.455,  # Calculated as (0.2*0.0696 + 0.8*0.554)
+        "sg_func": lambda t, p: 0.2 * calculate_specific_gravity_gas("Hydrogen", t, p) + 
+                               0.8 * calculate_specific_gravity_gas("Methane", t, p),
         "visc_func": None,
         "k_func": lambda t, p: calculate_specific_heat_ratio_mixture(t, p, 0.2, 0.8, "Hydrogen", "Methane"),
         "z_func": lambda t, p: calculate_compressibility_factor_mixture(t, p, 0.2, 0.8, "Hydrogen", "Methane"),
@@ -891,6 +940,7 @@ FLUID_LIBRARY = {
         "type": "gas",
         "coolprop_name": "Methane",  # Using methane as approximation for natural gas
         "sg_default": 0.6,  # Typical specific gravity for natural gas (range: 0.55-0.75)
+        "sg_func": lambda t, p: calculate_specific_gravity_gas("Methane", t, p),
         "visc_func": None,
         "k_func": lambda t, p: calculate_specific_heat_ratio("Methane", t, p),
         "z_func": lambda t, p: calculate_compressibility_factor("Methane", t, p),
