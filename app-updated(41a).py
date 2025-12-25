@@ -1945,9 +1945,9 @@ def cv_liquid_with_record(flow: float, p1: float, p2: float, sg: float, fl_at_op
         record.set_intermediate_value("Viscosity Correction Fr", fr, "", "Correction factor for low Reynolds number")
     
     # Apply corrections
-    #cv_after_fp = cv_pseudo / fp
-    #corrected_cv = cv_after_fp / fr
-    corrected_cv = cv_pseudo / fr
+    cv_after_fp = cv_pseudo
+    corrected_cv = cv_after_fp
+    
     
     if record:
         record.add_step(8, "Apply piping correction Fp", 
