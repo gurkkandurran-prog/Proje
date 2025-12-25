@@ -1887,10 +1887,10 @@ def cv_liquid_with_record(flow: float, p1: float, p2: float, sg: float, fl_at_op
     
     # Calculate pseudo Cv (value-specific but without viscosity correction)
     if dp < dp_max_valve:
-        cv_pseudo = (flow / N1) * math.sqrt(sg / dp)
+        cv_pseudo = (flow / (N1 * fp)) * math.sqrt(sg / dp)
         if record:
             record.add_step(5, "Calculate pseudo Cv (unchoked)", 
-                           "Cv_pseudo = (Q / N1) * √(SG / ΔP)", 
+                           "Cv_pseudo = (Q / (N1 * fp)) * √(SG / ΔP)", 
                            f"{cv_pseudo:.2f}", "",
                            {"Q": flow, "N1": N1, "SG": sg, "ΔP": dp, "Cv_pseudo": cv_pseudo})
     else:
