@@ -4544,17 +4544,10 @@ def main():
         if f'rho_{i}' not in st.session_state:
             st.session_state[f'rho_{i}'] = 1.0
     
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        default_logo = "logo.png"
-        if os.path.exists(default_logo):
-            st.image(default_logo, width=100)
-        else:
-            st.image("https://via.placeholder.com/100x100?text=LOGO", width=100)
-    with col2:
-        st.title("Control Valve Sizing Program")
-        st.markdown("**ISA/IEC Standards Compliant Valve Sizing with Enhanced Visualization**")
-        st.markdown("VASTAŞ R&D ")
+    # Sadece başlık ve alt başlık kalacak - logo kaldırıldı
+    st.title("Control Valve Sizing Program")
+    st.markdown("**ISA/IEC Standards Compliant Valve Sizing with Enhanced Visualization**")
+    st.markdown("VASTAŞ R&D ")
     
     with st.sidebar:
         st.header("VASTAŞ")
