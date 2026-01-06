@@ -4544,7 +4544,7 @@ def main():
         if f'rho_{i}' not in st.session_state:
             st.session_state[f'rho_{i}'] = 1.0
     
-    col1, col2 = st.columns([1, 4])
+    col1, col2 = st.columns([1, 5])
     with col1:
         default_logo = "logo.png"
         if os.path.exists(default_logo):
