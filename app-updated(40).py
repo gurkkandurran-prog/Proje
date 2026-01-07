@@ -3711,10 +3711,21 @@ def get_valve_display_name(valve):
     }
     rating_code = rating_code_map.get(valve.rating_class, valve.rating_class)
     
-    # NOT: Vana adına note ekleniyor (eğer varsa)
+    # Base name
     base_name = f'{valve.size}" E{valve.valve_type}{rating_code}'
+    
+    # Note kontrolü: NaN, boş string veya geçersiz değerleri filtrele
     if hasattr(valve, 'note') and valve.note:
-        return f'{base_name} ({valve.note})'
+        # Note'u string'e çevir
+        note_str = str(valve.note).strip()
+        
+        # Geçersiz değerleri kontrol et
+        if (note_str and 
+            note_str.lower() not in ['nan', 'none', 'null', ''] and
+            not note_str.isspace()):
+            return f'{base_name} ({note_str})'
+    
+    # Note yoksa veya geçersizse sadece base name'i döndür
     return base_name
 
 def create_valve_dropdown():
@@ -4708,17 +4719,29 @@ def main():
                         xt = float(row['Xt'])
                         xt_dict[opening] = xt
                     
-                    new_valve = Valve(
-                        size_inch=size,
-                        rating_class=rating_class,
-                        cv_table=cv_dict,
-                        fl_table=fl_dict,
-                        xt_table=xt_dict,
-                        fd=fd,
-                        d_inch=diameter,
-                        valve_type=valve_type,
-                        note=note  # NOT: note parametresi eklendi
-                    )
+                    if note and note.strip() and note.strip().lower() not in ['nan', 'none', 'null']:
+                        new_valve = Valve(
+                            size_inch=size,
+                            rating_class=rating_class,
+                            cv_table=cv_dict,
+                            fl_table=fl_dict,
+                            xt_table=xt_dict,
+                            fd=fd,
+                            d_inch=diameter,
+                            valve_type=valve_type,
+                            note=note.strip()
+                        )
+                    else:
+                        new_valve = Valve(
+                            size_inch=size,
+                            rating_class=rating_class,
+                            cv_table=cv_dict,
+                            fl_table=fl_dict,
+                            xt_table=xt_dict,
+                            fd=fd,
+                            d_inch=diameter,
+                            valve_type=valve_type
+                        )
                     add_valve_to_database(new_valve)
                     VALVE_DATABASE = load_valves_from_excel()
                     st.session_state.valve_database = VALVE_DATABASE
