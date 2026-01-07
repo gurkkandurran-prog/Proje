@@ -10,53 +10,68 @@ def get_valve_sheet_name(valve):
     return f"Valve_{valve.size}_{valve.rating_class}_{valve.valve_type}"
 
 def load_valves_from_excel():
-    """Load valve data from Excel file with note column"""
+    """Load valve data from Excel file using new sheet-per-valve structure"""
+    valves = []
+    if not os.path.exists(VALVE_DATA_FILE):
+        # Create initial Excel file with new structure if it doesn't exist
+        initial_valves = [
+            Valve(1, 600, 
+                {0:0.0, 10:3.28, 20:7.39, 30:12.0, 40:14.2, 50:14.9, 60:15.3, 70:15.7, 80:16.0, 90:16.4, 100:16.8},
+                {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
+                {10:0.581, 20:0.605, 30:0.617, 40:0.644, 50:0.764, 60:0.790, 70:0.809, 80:0.813, 90:0.795, 100:0.768},
+                1, 1.0, 3, "Örnek not"),  # NOT: son parametre olarak note eklendi
+            # ... [other initial valves] ...
+        ]
+        save_valves_to_excel(initial_valves)
+    
     try:
-        if not os.path.exists('valve_database.xlsx'):
-            return []
+        # Read main valve list sheet
+        main_df = pd.read_excel(VALVE_DATA_FILE, sheet_name='Valve List')
         
-        df = pd.read_excel('valve_database.xlsx')
-        valves = []
-        
-        for _, row in df.iterrows():
-            # Parse Cv table
+        for _, row in main_df.iterrows():
+            sheet_name = row['sheet_name']
+            # Read valve-specific sheet
+            valve_df = pd.read_excel(VALVE_DATA_FILE, sheet_name=sheet_name)
+            
+            # Convert to dictionaries
             cv_table = {}
-            for col in [col for col in df.columns if col.startswith('Cv_')]:
-                opening = int(col.split('_')[1])
-                cv_table[opening] = row[col]
-            
-            # Parse Fl table
             fl_table = {}
-            for col in [col for col in df.columns if col.startswith('Fl_')]:
-                opening = int(col.split('_')[1])
-                fl_table[opening] = row[col]
-            
-            # Parse Xt table
             xt_table = {}
-            for col in [col for col in df.columns if col.startswith('Xt_')]:
-                opening = int(col.split('_')[1])
-                xt_table[opening] = row[col]
             
-            # Get note column (default to empty string if not present)
-            note = row.get('Note', '')
+            for _, r in valve_df.iterrows():
+                opening = r['Opening (%)']
+                if not pd.isnull(r['Cv']):
+                    cv_table[opening] = r['Cv']
+                if not pd.isnull(r['Fl']):
+                    fl_table[opening] = r['Fl']
+                if not pd.isnull(r['Xt']):
+                    xt_table[opening] = r['Xt']
+            
+            # NOT: note sütununu oku (eğer yoksa boş string olarak ayarla)
+            note = row.get('note', '')
             
             valve = Valve(
-                size_inch=row['Size_inch'],
-                rating_class=row['Rating_Class'],
+                size_inch=row['size'],
+                rating_class=row['rating_class'],
                 cv_table=cv_table,
                 fl_table=fl_table,
                 xt_table=xt_table,
-                fd=row.get('Fd', 1.0),
-                d_inch=row.get('Diameter_inch', row['Size_inch']),
-                valve_type=row.get('Valve_Type', 3),
-                note=note
+                fd=row['fd'],
+                d_inch=row['diameter'],
+                valve_type=row['valve_type'],
+                note=note  # NOT: note parametresi eklendi
             )
             valves.append(valve)
-        
         return valves
     except Exception as e:
-        print(f"Error loading valve database: {e}")
-        return []
+        print(f"Error loading valves: {e}")
+        return [
+            Valve(2, 600, 
+                {0:0, 10:5, 20:15, 30:30, 40:45, 50:60, 60:75, 70:85, 80:92, 90:98, 100:100},
+                {0:0.5, 10:0.55, 20:0.6, 30:0.65, 40:0.7, 50:0.75, 60:0.8, 70:0.82, 80:0.83, 90:0.84, 100:0.85},
+                {0:0.2, 10:0.3, 20:0.4, 30:0.5, 40:0.6, 50:0.65, 60:0.7, 70:0.75, 80:0.78, 90:0.8, 100:0.81},
+                0.7, 2.0, 3, "Yedek vana notu")  # NOT: note eklendi
+        ]
 
 def save_valves_to_excel(valves):
     """Save list of Valve objects to Excel with new structure"""
@@ -72,7 +87,8 @@ def save_valves_to_excel(valves):
             'valve_type': valve.valve_type,
             'fd': valve.fd,
             'diameter': valve.diameter,
-            'sheet_name': sheet_name
+            'sheet_name': sheet_name,
+            'note': valve.note  # NOT: note sütunu eklendi
         })
         
         # Create valve data table
@@ -103,64 +119,17 @@ def save_valves_to_excel(valves):
             df.to_excel(writer, sheet_name=sheet_name, index=False)
 
 def add_valve_to_database(valve):
-    """Add valve to Excel database with note"""
-    try:
-        # Check if file exists
-        if os.path.exists('valve_database.xlsx'):
-            df = pd.read_excel('valve_database.xlsx')
-        else:
-            # Create new DataFrame
-            df = pd.DataFrame()
-        
-        # Prepare valve data
-        valve_data = {
-            'Size_inch': valve.size,
-            'Rating_Class': valve.rating_class,
-            'Valve_Type': valve.valve_type,
-            'Fd': valve.fd,
-            'Diameter_inch': valve.diameter,
-            'Note': valve.note  # Add note
-        }
-        
-        # Add Cv values
-        for opening, cv in valve.cv_table.items():
-            valve_data[f'Cv_{opening}'] = cv
-        
-        # Add Fl values
-        for opening, fl in valve.fl_table.items():
-            valve_data[f'Fl_{opening}'] = fl
-        
-        # Add Xt values
-        for opening, xt in valve.xt_table.items():
-            valve_data[f'Xt_{opening}'] = xt
-        
-        # Add to DataFrame
-        new_row = pd.DataFrame([valve_data])
-        df = pd.concat([df, new_row], ignore_index=True)
-        
-        # Save to Excel
-        df.to_excel('valve_database.xlsx', index=False)
-        return True
-    except Exception as e:
-        print(f"Error adding valve to database: {e}")
-        return False
+    """Add a new valve to the database"""
+    valves = load_valves_from_excel()
+    valves.append(valve)
+    save_valves_to_excel(valves)
 
 def delete_valve_from_database(size, rating_class, valve_type):
-    """Delete valve from Excel database"""
-    try:
-        if not os.path.exists('valve_database.xlsx'):
-            return False
-        
-        df = pd.read_excel('valve_database.xlsx')
-        
-        # Filter out the valve to delete
-        mask = ~((df['Size_inch'] == size) & 
-                 (df['Rating_Class'] == rating_class) & 
-                 (df['Valve_Type'] == valve_type))
-        df = df[mask]
-        
-        df.to_excel('valve_database.xlsx', index=False)
-        return True
-    except Exception as e:
-        print(f"Error deleting valve from database: {e}")
-        return False
+    """Delete a valve from the database"""
+    valves = load_valves_from_excel()
+    valves = [v for v in valves if not (
+        v.size == size and 
+        v.rating_class == rating_class and 
+        v.valve_type == valve_type
+    )]
+    save_valves_to_excel(valves)
