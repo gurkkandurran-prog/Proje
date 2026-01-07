@@ -4715,7 +4715,7 @@ def main():
                         xt_table=xt_dict,
                         fd=fd,
                         d_inch=diameter,
-                        valve_type=valve_type
+                        valve_type=valve_type,
                         note=note
                     )
                     add_valve_to_database(new_valve)
