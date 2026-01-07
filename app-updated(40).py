@@ -3710,7 +3710,12 @@ def get_valve_display_name(valve):
         2500: 6
     }
     rating_code = rating_code_map.get(valve.rating_class, valve.rating_class)
-    return f"{valve.size}\" E{valve.valve_type}{rating_code}"
+    
+    # NOT: Vana adına note ekleniyor (eğer varsa)
+    base_name = f'{valve.size}" E{valve.valve_type}{rating_code}'
+    if hasattr(valve, 'note') and valve.note:
+        return f'{base_name} ({valve.note})'
+    return base_name
 
 def create_valve_dropdown():
     valves = sorted(st.session_state.valve_database, key=lambda v: (v.size, v.rating_class, v.valve_type))
@@ -4574,6 +4579,11 @@ def main():
         st.markdown(f"**Size:** {selected_valve.size}\"")
         st.markdown(f"**Type:** {'Globe' if selected_valve.valve_type == 3 else 'Axial'}")
         st.markdown(f"**Rating Class:** {selected_valve.rating_class}")
+        
+        # NOT: Vana notunu göster
+        if hasattr(selected_valve, 'note') and selected_valve.note:
+            st.markdown(f"**Note:** {selected_valve.note}")
+        
         st.markdown(f"**Fl (Liquid Recovery):** {selected_valve.get_fl_at_opening(100):.3f}")
         st.markdown(f"**Xt (Pressure Drop Ratio):** {selected_valve.get_xt_at_opening(100):.3f}")
         st.markdown(f"**Fd (Style Modifier):** {selected_valve.fd:.2f}")
@@ -4620,6 +4630,9 @@ def main():
             valve_type = st.selectbox("Valve Type", [3, 4], format_func=lambda x: "Globe" if x == 3 else "Axial")
             fd = st.number_input("Fd", value=1.0)
             diameter = st.number_input("Diameter (inch)", min_value=0.1)
+            
+            # NOT: Yeni alan eklendi
+            note = st.text_input("Note (optional)", placeholder="Örn: Özel uygulama, modifiye vana vb.")
             
             st.subheader("Valve Characteristics Tables")
             
@@ -4703,7 +4716,8 @@ def main():
                         xt_table=xt_dict,
                         fd=fd,
                         d_inch=diameter,
-                        valve_type=valve_type
+                        valve_type=valve_type,
+                        note=note  # NOT: note parametresi eklendi
                     )
                     add_valve_to_database(new_valve)
                     VALVE_DATABASE = load_valves_from_excel()
