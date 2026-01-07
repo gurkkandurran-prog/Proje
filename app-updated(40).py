@@ -3710,7 +3710,13 @@ def get_valve_display_name(valve):
         2500: 6
     }
     rating_code = rating_code_map.get(valve.rating_class, valve.rating_class)
-    return f"{valve.size}\" E{valve.valve_type}{rating_code}"
+    display_name = f"{valve.size}\" E{valve.valve_type}{rating_code}"
+    
+    # Add note in parentheses if it exists
+    if hasattr(valve, 'note') and valve.note:
+        display_name += f" ({valve.note})"
+    
+    return display_name
 
 def create_valve_dropdown():
     valves = sorted(st.session_state.valve_database, key=lambda v: (v.size, v.rating_class, v.valve_type))
@@ -4571,13 +4577,17 @@ def main():
         show_simulation_btn = st.button("Show Simulation Results", use_container_width=True)
         
         st.header("Valve Details")
-        st.markdown(f"**Size:** {selected_valve.size}\"")
-        st.markdown(f"**Type:** {'Globe' if selected_valve.valve_type == 3 else 'Axial'}")
-        st.markdown(f"**Rating Class:** {selected_valve.rating_class}")
-        st.markdown(f"**Fl (Liquid Recovery):** {selected_valve.get_fl_at_opening(100):.3f}")
-        st.markdown(f"**Xt (Pressure Drop Ratio):** {selected_valve.get_xt_at_opening(100):.3f}")
-        st.markdown(f"**Fd (Style Modifier):** {selected_valve.fd:.2f}")
-        st.markdown(f"**Internal Diameter:** {selected_valve.diameter:.2f} in")
+    st.markdown(f"**Size:** {selected_valve.size}\"")
+    st.markdown(f"**Type:** {'Globe' if selected_valve.valve_type == 3 else 'Axial'}")
+    st.markdown(f"**Rating Class:** {selected_valve.rating_class}")
+    st.markdown(f"**Fl (Liquid Recovery):** {selected_valve.get_fl_at_opening(100):.3f}")
+    st.markdown(f"**Xt (Pressure Drop Ratio):** {selected_valve.get_xt_at_opening(100):.3f}")
+    st.markdown(f"**Fd (Style Modifier):** {selected_valve.fd:.2f}")
+    st.markdown(f"**Internal Diameter:** {selected_valve.diameter:.2f} in")
+    
+    # Display note if it exists
+    if hasattr(selected_valve, 'note') and selected_valve.note:
+        st.markdown(f"**Note:** {selected_valve.note}")
         
         # Cv Characteristics with Kv column
         st.subheader("Cv & Kv Characteristics")
@@ -4617,9 +4627,11 @@ def main():
         with st.expander("Add New Valve"):
             size = st.number_input("Size (inch)", min_value=0.5, step=0.5)
             rating_class = st.selectbox("Rating Class", [150, 300, 600, 900, 1500])
-            valve_type = st.selectbox("Valve Type", [3, 4], format_func=lambda x: "Globe" if x == 3 else "Axial")
+            valve_type = st.selectbox("Valve Type", [3, 4], format_func=lambda x: "Globe"     
+        if x == 3 else "Axial")
             fd = st.number_input("Fd", value=1.0)
             diameter = st.number_input("Diameter (inch)", min_value=0.1)
+            note = st.text_input("Note", value="", help="Optional note about the valve")
             
             st.subheader("Valve Characteristics Tables")
             
@@ -4704,6 +4716,7 @@ def main():
                         fd=fd,
                         d_inch=diameter,
                         valve_type=valve_type
+                        note=note
                     )
                     add_valve_to_database(new_valve)
                     VALVE_DATABASE = load_valves_from_excel()
@@ -4716,12 +4729,18 @@ def main():
             valve_options = {get_valve_display_name(v): v for v in VALVE_DATABASE}
             valve_to_delete = st.selectbox("Select Valve to Delete", list(valve_options.keys()))
             
+            # Show the selected valve's note before deletion
+            if valve_to_delete:
+                selected_valve_for_deletion = valve_options[valve_to_delete]
+                if hasattr(selected_valve_for_deletion, 'note') and selected_valve_for_deletion.note:
+                    st.info(f"Note for selected valve: {selected_valve_for_deletion.note}")
+            
             if st.button("Delete Valve"):
                 valve = valve_options[valve_to_delete]
                 delete_valve_from_database(valve.size, valve.rating_class, valve.valve_type)
                 VALVE_DATABASE = load_valves_from_excel()
                 st.session_state.valve_database = VALVE_DATABASE
-                st.success("Valve deleted from database!")
+                st.success(f"Valve deleted from database! (Note: {valve.note if hasattr(valve, 'note') else 'N/A'})")
     
     tab1, tab2, tab3, tab_results = st.tabs(["Scenario 1", "Scenario 2", "Scenario 3", "Results"])
     
