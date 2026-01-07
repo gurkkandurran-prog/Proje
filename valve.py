@@ -1,18 +1,34 @@
 # valve.py
 class Valve:
-    def __init__(self, size_inch: str, rating_class: str, cv_table: dict, 
-                 fl_table: dict, xt_table: dict, fd: float, d_inch: float,
-                 valve_type: int = 3):
-        if 0 not in cv_table:
-            cv_table[0] = 0.0
+    def __init__(self, size_inch, rating_class, cv_table, fl_table, xt_table, 
+                 fd=1.0, d_inch=None, valve_type=3, note=""):
+        """
+        Initialize a valve with characteristics.
+        
+        Parameters:
+        - size_inch: Valve size in inches
+        - rating_class: Pressure rating class (150, 300, 600, etc.)
+        - cv_table: Dictionary of Cv values by opening percentage
+        - fl_table: Dictionary of Fl values by opening percentage
+        - xt_table: Dictionary of Xt values by opening percentage
+        - fd: Valve style modifier
+        - d_inch: Internal diameter in inches
+        - valve_type: 3 for globe, 4 for axial
+        - note: Additional notes about the valve
+        """
         self.size = size_inch
         self.rating_class = rating_class
         self.cv_table = cv_table
         self.fl_table = fl_table
         self.xt_table = xt_table
         self.fd = fd
-        self.diameter = d_inch
-        self.valve_type = valve_type
+        self.valve_type = valve_type  # 3: globe, 4: axial
+        self.note = note
+        
+        if d_inch is None:
+            self.diameter = size_inch  # Default: same as nominal size
+        else:
+            self.diameter = d_inch
         
     def get_cv_at_opening(self, open_percent: float) -> float:
         open_percent = max(0, min(100, open_percent))
