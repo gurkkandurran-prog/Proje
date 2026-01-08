@@ -3187,7 +3187,7 @@ def evaluate_valve_for_scenario_with_record(valve, scenario):
     
     # Initialize iteration variables
     max_iterations = 20
-    tolerance = 0.5
+    tolerance = 0.1
     prev_opening = 0
     opening = 50
     converged = False
