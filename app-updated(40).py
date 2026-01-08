@@ -3186,8 +3186,8 @@ def evaluate_valve_for_scenario_with_record(valve, scenario):
                              {"use_valve_size": use_valve_size, "pipe_d_out": pipe_d_out})
     
     # Initialize iteration variables
-    max_iterations = 20
-    tolerance = 0.5
+    max_iterations = 50
+    tolerance = 0.1
     prev_opening = 0
     opening = 50
     converged = False
