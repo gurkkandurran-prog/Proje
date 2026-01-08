@@ -3331,7 +3331,7 @@ def evaluate_valve_for_scenario_with_record(valve, scenario):
                 cv_valve = valve.get_cv_at_opening(new_opening)
                 if cv_valve >= cv_req:
                     break
-                new_opening += 1
+                new_opening += 0.1
         
         # Store iteration results for display
         iteration_data = {
