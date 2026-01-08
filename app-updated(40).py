@@ -3314,7 +3314,7 @@ def evaluate_valve_for_scenario_with_record(valve, scenario):
         
         # Binary search for optimal opening
         low, high = 0, 100
-        for search_iter in range(20):
+        for search_iter in range(30):
             mid = (low + high) / 2
             cv_mid = valve.get_cv_at_opening(mid)
             if cv_mid >= cv_req:
