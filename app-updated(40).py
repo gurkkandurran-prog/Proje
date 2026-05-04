@@ -1669,7 +1669,7 @@ def calculate_valve_velocity_separate(scenario, valve, op_point):
         warnings.append(f"High inlet velocity ({inlet_velocity:.1f} m/s) for {scenario['fluid_type']}! (max {VELOCITY_LIMITS.get(scenario['fluid_type'], 10)} m/s)")
     if outlet_velocity > VELOCITY_LIMITS.get(scenario["fluid_type"], 10):
         warnings.append(f"High outlet velocity ({outlet_velocity:.1f} m/s) for {scenario['fluid_type']}! (max {VELOCITY_LIMITS.get(scenario['fluid_type'], 10)} m/s)")
-    if orifice_velocity > VELOCITY_LIMITS.get(scenario["fluid_type"], 10) * 2:
+    if orifice_velocity > VELOCITY_LIMITS.get(scenario["fluid_type"], 10) * 5:
         warnings.append(f"High orifice velocity ({orifice_velocity:.1f} m/s) for {scenario['fluid_type']}!")
     
     velocity_warning = "; ".join(warnings) if warnings else ""
