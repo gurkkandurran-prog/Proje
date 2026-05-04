@@ -45,7 +45,7 @@ ATM_TO_BAR = 1.01325
 KGCM2_TO_BAR = 0.980665
 
 # Velocity limits (m/s)
-VELOCITY_LIMITS = {"liquid": 5, "gas": 15, "steam": 15}
+VELOCITY_LIMITS = {"liquid": 2, "gas": 15, "steam": 15}
 
 # Conversion factor between Cv and Kv: Kv = Cv / 1.156
 CV_TO_KV = 1.156  # Conversion factor: Cv = 1.156 * Kv
