@@ -786,6 +786,7 @@ FLUID_LIBRARY = {
     "Water": {
         "type": "liquid",
         "coolprop_name": "Water",
+        "sg": 1.0, # yeni eklendi
         "visc_func": lambda t, p: calculate_kinematic_viscosity("Water", t, p),
         "k_func": None,
         "pv_func": lambda t, p: calculate_vapor_pressure("Water", t, p),
