@@ -766,16 +766,25 @@ class CalculationRecord:
 # CV TO KV CONVERSION FUNCTIONS
 # ========================
 def cv_to_kv(cv_value):
-    """Convert Cv to Kv"""
-    if cv_value is None or cv_value <= 0:
+    if cv_value is None:
         return 0
-    return cv_value / CV_TO_KV
+    # Vectorized for numpy arrays
+    if hasattr(cv_value, '__array__'):
+        return np.where(cv_value <= 0, 0, cv_value / CV_TO_KV)
+    else:
+        if cv_value <= 0:
+            return 0
+        return cv_value / CV_TO_KV
 
 def kv_to_cv(kv_value):
-    """Convert Kv to Cv"""
-    if kv_value is None or kv_value <= 0:
+    if kv_value is None:
         return 0
-    return kv_value * CV_TO_KV
+    if hasattr(kv_value, '__array__'):
+        return np.where(kv_value <= 0, 0, kv_value * CV_TO_KV)
+    else:
+        if kv_value <= 0:
+            return 0
+        return kv_value * CV_TO_KV
 
 def format_cv_kv(cv_value, kv_value):
     """Format Cv and Kv values for display"""
