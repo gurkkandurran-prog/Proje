@@ -2461,12 +2461,12 @@ def check_cavitation_with_record(p1: float, p2: float, pv: float, fl_at_op: floa
     return False, sigma, km, "Minimal cavitation risk"
 
 # ========================
-# MODIFIED PDF MODULE
+# PDF GENERATION WITH FPDF2 (UNICODE SAFE)
 # ========================
 from fpdf import FPDF
-import math
-from datetime import datetime
 from io import BytesIO
+from datetime import datetime
+import numpy as np
 
 class EnhancedPDFReport(FPDF):
     def __init__(self):
@@ -2476,44 +2476,43 @@ class EnhancedPDFReport(FPDF):
         self.set_title("Valve Sizing Report with Calculation Details")
         self.set_author("VASTAS Valve Sizing")
         self.alias_nb_pages()
-        # Use DejaVu font (built into fpdf2) for full Unicode support
-        self.add_font("DejaVu", "", "DejaVuSansCondensed.ttf")
-        self.add_font("DejaVu", "B", "DejaVuSansCondensed-Bold.ttf")
-        self.add_font("DejaVu", "I", "DejaVuSansCondensed-Oblique.ttf")
-    
+        # Use built‑in DejaVu font (supports many languages)
+        self.set_font("DejaVu", size=10)
+        # Register bold and italic variants
+        self.add_font("DejaVu", "B", fname="DejaVuSansCondensed-Bold.ttf", uni=True)
+        self.add_font("DejaVu", "I", fname="DejaVuSansCondensed-Oblique.ttf", uni=True)
+
     def header(self):
         if self.page_no() == 1:
             return
         self.set_font('DejaVu', 'B', 12)
         self.cell(0, 10, 'Valve Sizing Report', 0, 1, 'C')
         self.ln(5)
-    
+
     def footer(self):
         self.set_y(-15)
         self.set_font('DejaVu', 'I', 8)
         self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
-    
+
     def add_section_title(self, title):
         self.ln(5)
         self.set_font('DejaVu', 'B', 14)
         self.cell(0, 10, title, 0, 1)
         self.ln(2)
-    
+
     def add_subtitle(self, title):
         self.set_font('DejaVu', 'B', 12)
         self.cell(0, 8, title, 0, 1)
         self.ln(1)
-    
+
     def add_paragraph(self, text):
         self.set_font('DejaVu', '', 10)
-        self.multi_cell(0, 5, text)
+        self.multi_cell(0, 5, str(text))
         self.ln(2)
-    
-    def add_key_value_table(self, data_dict, col_widths=[60, 120]):
-        """Add key-value pairs as a table"""
+
+    def add_key_value_table(self, data_dict, col_widths=(60, 120)):
         self.set_font('DejaVu', '', 9)
         for key, data in data_dict.items():
-            # Extract value and unit
             if isinstance(data, dict):
                 value_str = str(data.get('value', ''))
                 unit_str = str(data.get('unit', ''))
@@ -2522,12 +2521,10 @@ class EnhancedPDFReport(FPDF):
                 value_str = str(data)
                 unit_str = ''
                 desc_str = ''
-            
-            # Key column
+
             self.set_font('DejaVu', 'B', 9)
             self.cell(col_widths[0], 6, key, 0, 0)
-            
-            # Value column
+
             self.set_font('DejaVu', '', 9)
             value_display = value_str
             if unit_str:
@@ -2536,32 +2533,26 @@ class EnhancedPDFReport(FPDF):
                 value_display += f" ({desc_str})"
             self.cell(col_widths[1], 6, value_display, 0, 1)
         self.ln(3)
-    
+
     def add_calculation_step(self, step_num, description, formula, result, unit="", details=None):
-        """Add a calculation step with details"""
         self.set_font('DejaVu', 'B', 9)
         self.cell(0, 6, f"Step {step_num}: {description}", 0, 1)
-        
         self.set_font('DejaVu', '', 8)
         self.multi_cell(0, 4, f"Formula: {formula}")
-        
         self.set_font('DejaVu', '', 9)
         result_text = f"Result: {result}"
         if unit:
             result_text += f" {unit}"
         self.cell(0, 5, result_text, 0, 1)
-        
         if details:
             self.set_font('DejaVu', 'I', 8)
-            for key, value in details.items():
-                self.cell(0, 4, f"  {key}: {value}", 0, 1)
+            for k, v in details.items():
+                self.cell(0, 4, f"  {k}: {v}", 0, 1)
         self.ln(2)
-    
+
     def add_iteration_data(self, iteration_num, data):
-        """Add iteration data"""
         self.set_font('DejaVu', 'B', 10)
         self.cell(0, 7, f"Iteration {iteration_num}:", 0, 1)
-        
         self.set_font('DejaVu', '', 8)
         for key, value in data.items():
             if isinstance(value, (int, float)):
@@ -2572,15 +2563,12 @@ class EnhancedPDFReport(FPDF):
                     if isinstance(subvalue, (int, float)):
                         self.cell(10, 4, "", 0, 0)
                         self.cell(0, 4, f"    {subkey}: {subvalue}", 0, 1)
-        self.ln(3)
-    
+        self.ln(2)
+
     def add_fp_details(self, fp_details):
-        """Add Fp calculation details"""
         self.add_subtitle("Piping Geometry Factor (Fp) Calculation Details")
-        
-        if 'note' in fp_details and fp_details['note']:
+        if fp_details.get('note'):
             self.add_paragraph(f"Note: {fp_details['note']}")
-        
         self.set_font('DejaVu', 'B', 9)
         self.cell(0, 6, "Input Parameters:", 0, 1)
         self.set_font('DejaVu', '', 8)
@@ -2588,48 +2576,41 @@ class EnhancedPDFReport(FPDF):
         self.cell(0, 4, f"  Inlet pipe diameter: {fp_details.get('pipe_d_in_inch', 'N/A')} inch", 0, 1)
         self.cell(0, 4, f"  Outlet pipe diameter: {fp_details.get('pipe_d_out_inch', 'N/A')} inch", 0, 1)
         self.cell(0, 4, f"  Cv at operating point: {fp_details.get('cv_op', 'N/A'):.1f}", 0, 1)
-        
         self.ln(2)
         self.set_font('DejaVu', 'B', 9)
         self.cell(0, 6, "Intermediate Calculations:", 0, 1)
         self.set_font('DejaVu', '', 8)
-        self.cell(0, 4, f"  d_ratio_in (valve/inlet): {fp_details.get('d_ratio_in', 'N/A'):.4f}", 0, 1)
-        self.cell(0, 4, f"  d_ratio_out (valve/outlet): {fp_details.get('d_ratio_out', 'N/A'):.4f}", 0, 1)
-        self.cell(0, 4, f"  K1 (inlet reducer coefficient): {fp_details.get('K1', 'N/A'):.4f}", 0, 1)
-        self.cell(0, 4, f"  K2 (outlet reducer coefficient): {fp_details.get('K2', 'N/A'):.4f}", 0, 1)
-        self.cell(0, 4, f"  KB1 (inlet Bernoulli coefficient): {fp_details.get('KB1', 'N/A'):.4f}", 0, 1)
-        self.cell(0, 4, f"  KB2 (outlet Bernoulli coefficient): {fp_details.get('KB2', 'N/A'):.4f}", 0, 1)
+        self.cell(0, 4, f"  d_ratio_in: {fp_details.get('d_ratio_in', 'N/A'):.4f}", 0, 1)
+        self.cell(0, 4, f"  d_ratio_out: {fp_details.get('d_ratio_out', 'N/A'):.4f}", 0, 1)
+        self.cell(0, 4, f"  K1: {fp_details.get('K1', 'N/A'):.4f}", 0, 1)
+        self.cell(0, 4, f"  K2: {fp_details.get('K2', 'N/A'):.4f}", 0, 1)
+        self.cell(0, 4, f"  KB1: {fp_details.get('KB1', 'N/A'):.4f}", 0, 1)
+        self.cell(0, 4, f"  KB2: {fp_details.get('KB2', 'N/A'):.4f}", 0, 1)
         self.cell(0, 4, f"  ΣK = K1 + K2 + KB1 - KB2: {fp_details.get('sumK', 'N/A'):.4f}", 0, 1)
         self.cell(0, 4, f"  N2 constant: {fp_details.get('N2', 'N/A')}", 0, 1)
-        
         self.ln(2)
         self.set_font('DejaVu', 'B', 9)
         self.cell(0, 6, "Final Calculation:", 0, 1)
         self.set_font('DejaVu', '', 8)
         if 'formula' in fp_details:
             self.cell(0, 4, f"  Formula: {fp_details['formula']}", 0, 1)
-        self.cell(0, 4, f"  Term = 1 + (ΣK/N2) * (Cv/d²)²: {fp_details.get('term', 'N/A'):.4f}", 0, 1)
-        self.cell(0, 4, f"  Fp = 1 / √(Term): {fp_details.get('Fp', 'N/A'):.4f}", 0, 1)
+        self.cell(0, 4, f"  Term = 1 + (ΣK/N2)*(Cv/d²)²: {fp_details.get('term', 'N/A'):.4f}", 0, 1)
+        self.cell(0, 4, f"  Fp = 1 / √Term: {fp_details.get('Fp', 'N/A'):.4f}", 0, 1)
         self.ln(5)
+
 
 def generate_detailed_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitation_info,
                                 plot_bytes=None, flow_dp_plot_bytes=None, calculation_records=None):
-    """
-    Generate detailed PDF report with calculation records using fpdf2 and DejaVu font.
-    """
     try:
         pdf = EnhancedPDFReport()
         pdf.add_page()
-        
-        # Cover section
         pdf.add_section_title("VALVE SIZING REPORT WITH CALCULATION DETAILS")
         pdf.add_paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         pdf.add_paragraph(f"Valve: {get_valve_display_name(valve)}")
         pdf.ln(10)
-        
-        # Valve specifications
+
         pdf.add_subtitle("Valve Specifications")
-        specs_data = {
+        specs = {
             "Size": {"value": valve.size, "unit": "inch"},
             "Type": {"value": "Globe" if valve.valve_type == 3 else "Axial"},
             "Rating Class": {"value": valve.rating_class},
@@ -2640,12 +2621,16 @@ def generate_detailed_pdf_report(scenarios, valve, op_points, req_cvs, warnings,
             "Fd": {"value": f"{valve.fd:.2f}"},
             "Diameter": {"value": f"{valve.diameter:.2f}", "unit": "inch"}
         }
-        pdf.add_key_value_table(specs_data)
-        
-        # Results summary
+        pdf.add_key_value_table(specs)
+
         pdf.add_subtitle("Sizing Results Summary")
-        results_headers = ['Scenario', 'Req Cv/Kv', 'Opening%', 'Actual Cv/Kv', 'Margin%', 'Status']
-        results_data = []
+        headers = ['Scenario', 'Req Cv/Kv', 'Opening%', 'Actual Cv/Kv', 'Margin%', 'Status']
+        col_w = [30, 30, 20, 30, 20, 30]
+        pdf.set_font('DejaVu', 'B', 9)
+        for i, h in enumerate(headers):
+            pdf.cell(col_w[i], 7, h, 1, 0, 'C')
+        pdf.ln()
+        pdf.set_font('DejaVu', '', 8)
         for i, scenario in enumerate(scenarios):
             actual_cv = valve.get_cv_at_opening(op_points[i])
             actual_kv = cv_to_kv(actual_cv)
@@ -2662,27 +2647,19 @@ def generate_detailed_pdf_report(scenarios, valve, op_points, req_cvs, warnings,
                 status = "LOW OPEN"
             elif "High velocity" in warnings[i]:
                 status = "HIGH VEL"
-            results_data.append([
+            row = [
                 scenario["name"],
                 f"Cv: {req_cvs[i]:.1f}\nKv: {req_kv:.1f}",
                 f"{op_points[i]:.1f}%",
                 f"Cv: {actual_cv:.1f}\nKv: {actual_kv:.1f}",
                 f"{margin:.1f}%",
                 status
-            ])
-        col_widths = [30, 30, 20, 30, 20, 30]
-        pdf.set_font('DejaVu', 'B', 9)
-        for i, header in enumerate(results_headers):
-            pdf.cell(col_widths[i], 7, header, 1, 0, 'C')
-        pdf.ln()
-        pdf.set_font('DejaVu', '', 8)
-        for row in results_data:
-            for i, item in enumerate(row):
-                pdf.cell(col_widths[i], 6, item, 1, 0, 'C')
+            ]
+            for j, cell in enumerate(row):
+                pdf.cell(col_w[j], 6, cell, 1, 0, 'C')
             pdf.ln()
         pdf.ln(5)
-        
-        # Detailed calculation records for each scenario
+
         for i, scenario in enumerate(scenarios):
             pdf.add_page()
             pdf.add_subtitle(f"Detailed Calculation Record: {scenario['name']}")
@@ -2694,65 +2671,60 @@ def generate_detailed_pdf_report(scenarios, valve, op_points, req_cvs, warnings,
                 "Temperature": {"value": f"{scenario['temp_display']:.1f}", "unit": scenario['temp_unit']},
             }
             pdf.add_key_value_table(scenario_data)
+
             if calculation_records and i < len(calculation_records) and calculation_records[i]:
-                record = calculation_records[i]
-                summary = record.get_summary()
-                if 'fp_details' in summary and summary['fp_details']:
+                rec = calculation_records[i]
+                summary = rec.get_summary()
+                if summary.get('fp_details'):
                     pdf.add_fp_details(summary['fp_details'])
                 if summary.get('formulas'):
                     pdf.add_subtitle("Formulas Used")
-                    for formula in summary['formulas']:
+                    for f in summary['formulas']:
                         pdf.set_font('DejaVu', 'B', 9)
-                        pdf.cell(0, 6, formula['name'], 0, 1)
+                        pdf.cell(0, 6, f['name'], 0, 1)
                         pdf.set_font('Courier', '', 8)
-                        pdf.multi_cell(0, 4, f"Formula: {formula['formula']}")
+                        pdf.multi_cell(0, 4, f"Formula: {f['formula']}")
                         pdf.set_font('DejaVu', '', 8)
-                        pdf.multi_cell(0, 4, f"Explanation: {formula['explanation']}")
-                        if formula.get('variables'):
+                        pdf.multi_cell(0, 4, f"Explanation: {f['explanation']}")
+                        if f.get('variables'):
                             pdf.set_font('DejaVu', 'I', 8)
-                            vars_text = "Variables: " + ", ".join([f"{k}: {v}" for k, v in formula['variables'].items()])
-                            pdf.multi_cell(0, 4, vars_text)
+                            vars_txt = "Variables: " + ", ".join([f"{k}: {v}" for k, v in f['variables'].items()])
+                            pdf.multi_cell(0, 4, vars_txt)
                         pdf.ln(2)
                 if summary.get('steps'):
                     pdf.add_subtitle("Calculation Steps")
                     for step in summary['steps']:
-                        details = step.get('details', {})
                         pdf.add_calculation_step(
-                            step['step'],
-                            step['description'],
-                            step['formula'],
-                            step['result'],
-                            step['unit'],
-                            details
+                            step['step'], step['description'], step['formula'],
+                            step['result'], step['unit'], step.get('details', {})
                         )
                 if summary.get('iterations'):
                     pdf.add_subtitle("Iteration History")
-                    for iteration in summary['iterations']:
-                        pdf.add_iteration_data(iteration['iteration'], iteration['data'])
+                    for it in summary['iterations']:
+                        pdf.add_iteration_data(it['iteration'], it['data'])
                 if summary.get('assumptions'):
                     pdf.add_subtitle("Assumptions")
-                    for assumption in summary['assumptions']:
+                    for a in summary['assumptions']:
                         pdf.set_font('DejaVu', '', 9)
-                        pdf.cell(0, 5, f"• {assumption['assumption']}", 0, 1)
+                        pdf.cell(0, 5, f"• {a['assumption']}", 0, 1)
                         pdf.set_font('DejaVu', 'I', 8)
-                        pdf.multi_cell(0, 4, f"  Reason: {assumption['reason']}")
+                        pdf.multi_cell(0, 4, f"  Reason: {a['reason']}")
                         pdf.ln(1)
                 if summary.get('warnings'):
                     pdf.add_subtitle("Warnings and Notes")
-                    for warning in summary['warnings']:
-                        severity = warning['severity'].upper()
+                    for w in summary['warnings']:
+                        severity = w['severity'].upper()
                         pdf.set_font('DejaVu', 'B' if severity == 'ERROR' else '', 9)
-                        pdf.cell(0, 5, f"[{severity}] {warning['warning']}", 0, 1)
+                        pdf.cell(0, 5, f"[{severity}] {w['warning']}", 0, 1)
                         pdf.ln(1)
                 if summary.get('results'):
                     pdf.add_subtitle("Final Results")
                     pdf.add_key_value_table(summary['results'])
+
         if plot_bytes:
             pdf.add_page()
             pdf.add_subtitle("Valve Cv Characteristic")
             try:
-                from PIL import Image
-                img = Image.open(BytesIO(plot_bytes))
                 pdf.image(BytesIO(plot_bytes), x=15, w=180)
             except:
                 pdf.add_paragraph("(Cv curve image could not be embedded)")
@@ -2763,6 +2735,7 @@ def generate_detailed_pdf_report(scenarios, valve, op_points, req_cvs, warnings,
                 pdf.image(BytesIO(flow_dp_plot_bytes), x=15, w=180)
             except:
                 pdf.add_paragraph("(Flow-DP plot could not be embedded)")
+
         pdf.add_page()
         pdf.add_subtitle("Calculation Notes")
         pdf.add_paragraph("This report was generated by VASTAS Valve Sizing Software.")
@@ -2770,18 +2743,19 @@ def generate_detailed_pdf_report(scenarios, valve, op_points, req_cvs, warnings,
         pdf.add_paragraph("Pipe sizing corrections applied using separate inlet/outlet diameters.")
         pdf.add_paragraph("All values are for engineering reference only.")
         pdf.add_paragraph("Calculation records show step-by-step process with actual values used.")
-        pdf_bytes_io = BytesIO()
-        pdf.output(pdf_bytes_io)
-        pdf_bytes_io.seek(0)
-        return pdf_bytes_io
+
+        out = BytesIO()
+        pdf.output(out)
+        out.seek(0)
+        return out
     except Exception as e:
-        # Fallback to simple PDF
+        # Fallback
         return generate_simple_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitation_info,
                                          plot_bytes, flow_dp_plot_bytes, calculation_records)
 
+
 def generate_simple_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitation_info,
                               plot_bytes=None, flow_dp_plot_bytes=None, calculation_records=None):
-    """Simple fallback PDF generation using fpdf2"""
     try:
         pdf = FPDF()
         pdf.add_page()
@@ -2798,21 +2772,20 @@ def generate_simple_pdf_report(scenarios, valve, op_points, req_cvs, warnings, c
                 req_kv = cv_to_kv(req_cvs[i])
                 margin = (actual_cv / req_cvs[i] - 1) * 100 if req_cvs[i] > 0 else 0
                 pdf.cell(0, 6, f"{scenario['name']}: ReqCv={req_cvs[i]:.1f}(Kv={req_kv:.1f}), Open={op_points[i]:.1f}%, Margin={margin:.1f}%", 0, 1)
-        pdf_bytes_io = BytesIO()
-        pdf.output(pdf_bytes_io)
-        pdf_bytes_io.seek(0)
-        return pdf_bytes_io
-    except Exception as e:
+        out = BytesIO()
+        pdf.output(out)
+        out.seek(0)
+        return out
+    except:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font('Helvetica', 'B', 16)
         pdf.cell(0, 10, 'Valve Sizing Report', 0, 1)
-        pdf.set_font('Helvetica', '', 12)
         pdf.cell(0, 10, 'Calculation completed successfully.', 0, 1)
-        pdf_bytes_io = BytesIO()
-        pdf.output(pdf_bytes_io)
-        pdf_bytes_io.seek(0)
-        return pdf_bytes_io
+        out = BytesIO()
+        pdf.output(out)
+        out.seek(0)
+        return out
 
 # ============================================================================
 # The rest of your original code (valve database, fluid properties, UI, etc.)
