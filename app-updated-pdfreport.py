@@ -600,7 +600,34 @@ class CalculationRecord:
             'fp_details': self.fp_details,
             'input_units': self.input_units
         }
+     def get_valve_display_name(valve):
+    rating_code_map = {
+        150: 1,
+        300: 2,
+        600: 3,
+        900: 4,
+        1500: 5,
+        2500: 6
+    }
+    rating_code = rating_code_map.get(valve.rating_class, valve.rating_class)
+    
+    # Base name
+    base_name = f'{valve.size}" E{valve.valve_type}{rating_code}'
+    
+    # Note kontrolü: NaN, boş string veya geçersiz değerleri filtrele
+    if hasattr(valve, 'note') and valve.note:
+        # Note'u string'e çevir
+        note_str = str(valve.note).strip()
         
+        # Geçersiz değerleri kontrol et
+        if (note_str and 
+            note_str.lower() not in ['nan', 'none', 'null', ''] and
+            not note_str.isspace()):
+            return f'{base_name} ({note_str})'
+    
+    # Note yoksa veya geçersizse sadece base name'i döndür
+    return base_name
+
     def generate_detailed_report(self):
         """Generate a detailed text report of the calculation"""
         report = []
